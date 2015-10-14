@@ -30,7 +30,8 @@ used to store PAR2 archives and possibly history information about each file.
 ### `doc status [DIR]`
 
 Scan `DIR` or the current directory and display a list of new and modified
-files.
+files. Conflicts are shown with `C` for the main filename and with `c` for
+alternatives.
 
 ### `doc check [-a] [DIR]`
 
@@ -63,6 +64,12 @@ destination in the following way:
 
 Same as `cp` but the synchronisation is bidirectional. `sync` takes care not to
 copy over and over the conflict files.
+
+### `doc resolve [-rm] FILE`
+
+Mark the `FILE` as resolved using its current content. Alternatives are removed
+only if `-rm` is specified, otherwise they loose their link with the original
+file.
 
 ### `doc restore -a|FILE`
 

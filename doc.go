@@ -121,7 +121,7 @@ func mainCheck(args []string) {
   })
 
   if err != nil {
-    fmt.Errorf("%v", err)
+    fmt.Fprintf(os.Stderr, "%v", err)
     os.Exit(1)
   }
 }
@@ -134,8 +134,12 @@ func mainStatus(args []string) {
     dir = "."
   }
 
+  status := 0
+
   err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
     if err != nil {
+      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+      status = 1
       return err
     }
 
@@ -148,11 +152,16 @@ func mainStatus(args []string) {
 
     hashTimeStr, err := xattr.Get(path, XattrHashTime)
     if err != nil {
-      fmt.Printf("?\t%s\n", path)
+      if info.Mode() & os.FileMode(0200) == 0 {
+        fmt.Printf("? (ro)\t%s\n", path)
+      } else {
+        fmt.Printf("?\t%s\n", path)
+      }
     } else {
       hashTime, err := time.Parse(time.RFC3339Nano, string(hashTimeStr))
       if err != nil {
-        return err
+        fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+        return nil
       }
 
       if hashTime != info.ModTime() {
@@ -164,21 +173,27 @@ func mainStatus(args []string) {
   })
 
   if err != nil {
-    fmt.Errorf("%v", err)
+    fmt.Fprintf(os.Stderr, "%v", err)
     os.Exit(1)
   }
+  os.Exit(status)
 }
 
 func mainCommit(args []string) {
   f := flag.NewFlagSet("status", flag.ExitOnError)
+  opt_force := f.Bool("f", false, "Force writing xattrs on read only files")
   f.Parse(args)
   dir := f.Arg(0)
   if dir == "" {
     dir = "."
   }
 
+  status := 0
+
   err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
     if err != nil {
+      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+      status = 1
       return err
     }
 
@@ -189,25 +204,80 @@ func mainCommit(args []string) {
       return nil
     }
 
-    digest, err := hashFile(path)
+    digest, err := commitFile(path, info, *opt_force)
     if err != nil {
-      return err
-    }
-
-    hash, err := xattr.Get(path, XattrHash)
-    if err != nil || !bytes.Equal(hash, digest) {
+      status = 1
+      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+    } else if digest != nil {
       fmt.Printf("%s %s\n", base58.Encode(digest), path)
-      xattr.Set(path, XattrHash, digest)
     }
 
-    xattr.Set(path, XattrHashTime, []byte(info.ModTime().Format(time.RFC3339Nano)))
     return nil
   })
 
   if err != nil {
-    fmt.Errorf("%v", err)
+    fmt.Fprintf(os.Stderr, "%v", err)
     os.Exit(1)
   }
+
+  os.Exit(status)
+}
+
+func commitFile(path string, info os.FileInfo, force bool) ([]byte, error) {
+  digest, err := hashFile(path)
+  if err != nil {
+    return nil, err
+  }
+
+  timeData := []byte(info.ModTime().Format(time.RFC3339Nano))
+
+  hash, err := xattr.Get(path, XattrHash)
+  if err != nil || !bytes.Equal(hash, digest) {
+    err = xattr.Set(path, XattrHash, digest)
+    if err != nil && force && os.IsPermission(err) {
+      fmt.Fprintf(os.Stderr, "%s: force write xattrs\n", path)
+      m := info.Mode()
+      e1 := os.Chmod(path, m | 0200)
+      if e1 != nil {
+        err = e1
+      } else {
+        digest, err = commitFile(path, info, false)
+        e2 := os.Chmod(path, m)
+        if e2 != nil {
+          err = e2
+        }
+      }
+    } else if err != nil {
+      return nil, err
+    }
+  } else {
+    digest = nil
+  }
+
+  hashTimeStr, err := xattr.Get(path, XattrHashTime)
+  var hashTime time.Time
+  if err == nil {
+    hashTime, err = time.Parse(time.RFC3339Nano, string(hashTimeStr))
+  }
+  if err != nil || hashTime != info.ModTime() {
+    err = xattr.Set(path, XattrHashTime, timeData)
+    if err != nil && force && os.IsPermission(err) {
+      fmt.Fprintf(os.Stderr, "%s: force write xattrs\n", path)
+      m := info.Mode()
+      e1 := os.Chmod(path, m | 0200)
+      if e1 != nil {
+        err = e1
+      } else {
+        digest, err = commitFile(path, info, false)
+        e2 := os.Chmod(path, m)
+        if e2 != nil {
+          err = e2
+        }
+      }
+    }
+  }
+
+  return digest, err
 }
 
 func hashFile(path string) (mh.Multihash, error) {
