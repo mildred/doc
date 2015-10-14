@@ -8,6 +8,7 @@ import (
   "time"
   "path"
   "bytes"
+  "syscall"
   "os/exec"
   "crypto/sha1"
   "path/filepath"
@@ -16,6 +17,9 @@ import (
   mh "github.com/jbenet/go-multihash"
   base58 "github.com/jbenet/go-base58"
 )
+
+const XATTR_CREATE  = 1
+const XATTR_REPLACE = 2
 
 const DirStoreName string = ".dirstore"
 const XattrHash string = "user.doc.multihash"
@@ -143,13 +147,31 @@ func conflictFileAlternatives(path string) []string {
   var alternatives []string
   for i := 0; true; i++ {
     alt, err := xattr.Get(path, fmt.Sprintf("%s.%d", XattrConflict, i))
-    if err != nil {
+    if err == nil {
       alternatives = append(alternatives, string(alt))
     } else {
       break
     }
   }
   return alternatives
+}
+
+func markConflictFor(path, conflictName string) error {
+  return xattr.Set(path, XattrConflict, []byte(conflictName))
+}
+
+func addConflictAlternative(path, alternativeName string) error {
+  for i := 0; true; i++ {
+    err := xattr.Setxattr(path, fmt.Sprintf("%s.%d", XattrConflict, i), []byte(alternativeName), XATTR_CREATE)
+    if err == nil {
+      return nil
+    } else if os.IsExist(err) || err == syscall.EEXIST {
+      continue
+    } else {
+      return err
+    }
+  }
+  return nil
 }
 
 func mainStatus(args []string) {
@@ -383,6 +405,14 @@ func copyEntry(src, dst string, dry_run bool) ([]string, error) {
       fmt.Printf("cp -la %s %s\n", src, dstname)
     } else {
       err = exec.Command("cp", "-la", src, dstname).Run()
+      if err != nil {
+        return nil, err
+      }
+      err = markConflictFor(dstname, filepath.Base(dst))
+      if err != nil {
+        return nil, err
+      }
+      err = addConflictAlternative(dst, filepath.Base(dstname))
       if err != nil {
         return nil, err
       }
