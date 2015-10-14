@@ -20,6 +20,8 @@ import (
 const DirStoreName string = ".dirstore"
 const XattrHash string = "user.doc.multihash"
 const XattrHashTime string = "user.doc.multihash.time"
+const XattrConflict string = "user.doc.conflict"
+const XattrAlternative string = "user.doc.alternative"
 
 var commands map[string]func([]string)
 
@@ -128,6 +130,28 @@ func mainCheck(args []string) {
   }
 }
 
+func conflictFile(path string) string {
+  conflict, err := xattr.Get(path, XattrConflict)
+  if err != nil {
+    return ""
+  } else {
+    return string(conflict)
+  }
+}
+
+func conflictFileAlternatives(path string) []string {
+  var alternatives []string
+  for i := 0; true; i++ {
+    alt, err := xattr.Get(path, fmt.Sprintf("%s.%d", XattrConflict, i))
+    if err != nil {
+      alternatives = append(alternatives, string(alt))
+    } else {
+      break
+    }
+  }
+  return alternatives
+}
+
 func mainStatus(args []string) {
   f := flag.NewFlagSet("status", flag.ExitOnError)
   f.Parse(args)
@@ -152,12 +176,19 @@ func mainStatus(args []string) {
       return nil
     }
 
+    var conflict string = ""
+    if conflictFile(path) != "" {
+      conflict = " c"
+    } else if len(conflictFileAlternatives(path)) > 0 {
+      conflict = " C"
+    }
+
     hashTimeStr, err := xattr.Get(path, XattrHashTime)
     if err != nil {
       if info.Mode() & os.FileMode(0200) == 0 {
-        fmt.Printf("? (ro)\t%s\n", path)
+        fmt.Printf("?%s (ro)\t%s\n", conflict, path)
       } else {
-        fmt.Printf("?\t%s\n", path)
+        fmt.Printf("?%s\t%s\n", conflict, path)
       }
     } else {
       hashTime, err := time.Parse(time.RFC3339Nano, string(hashTimeStr))
@@ -167,7 +198,9 @@ func mainStatus(args []string) {
       }
 
       if hashTime != info.ModTime() {
-        fmt.Printf("+\t%s\n", path)
+        fmt.Printf("+%s\t%s\n", conflict, path)
+      } else if conflict != "" {
+        fmt.Printf("%s\t%s\n", conflict, path)
       }
     }
 
