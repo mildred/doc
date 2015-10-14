@@ -44,9 +44,6 @@ are also shown.
 For each modified file in `DIR` or the current directory, computes a checksum
 and store it in the extended attributes.
 
-Future Usage
-------------
-
 ### `doc cp [SRC] DEST`
 
 Copy each files in `SRC` or the current directory over to `DEST`. Both arguments
@@ -59,6 +56,9 @@ destination in the following way:
 - Files from source existing in the destination with different content: the file
   is copied under a new name, and a conflict is registred with the original file
   in the destination directory.
+
+Future Usage
+------------
 
 ### `doc sync [DIR1] DIR2`
 
