@@ -28,7 +28,7 @@ func mainCheck(args []string) {
     }
 
     // Skip .dirstore/ at root
-    if filepath.Base(path) == repo.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
+    if filepath.Base(path) == attrs.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
       return filepath.SkipDir
     } else if info.IsDir() {
       return nil

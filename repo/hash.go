@@ -10,7 +10,6 @@ import (
   attrs "github.com/mildred/doc/attrs"
 )
 
-const DirStoreName string = ".dirstore"
 const XattrHash string = "user.doc.multihash"
 const XattrHashTime string = "user.doc.multihash.time"
 const XattrConflict string = "user.doc.conflict"

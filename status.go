@@ -8,7 +8,7 @@ import (
   "path/filepath"
 
   repo "github.com/mildred/doc/repo"
-  xattr "github.com/ivaxer/go-xattr"
+  attrs "github.com/mildred/doc/attrs"
 )
 
 func mainStatus(args []string) {
@@ -29,7 +29,7 @@ func mainStatus(args []string) {
     }
 
     // Skip .dirstore/ at root
-    if filepath.Base(path) == repo.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
+    if filepath.Base(path) == attrs.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
       return filepath.SkipDir
     } else if info.IsDir() {
       return nil
@@ -42,7 +42,7 @@ func mainStatus(args []string) {
       conflict = " C"
     }
 
-    hashTimeStr, err := xattr.Get(path, repo.XattrHashTime)
+    hashTimeStr, err := attrs.Get(path, repo.XattrHashTime)
     if err != nil {
       if info.Mode() & os.FileMode(0200) == 0 {
         fmt.Printf("?%s (ro)\t%s\n", conflict, path)

@@ -6,7 +6,7 @@ import (
   "os"
   "path"
 
-  repo "github.com/mildred/doc/repo"
+  attrs "github.com/mildred/doc/attrs"
 )
 
 var commands map[string]func([]string)
@@ -48,7 +48,7 @@ func mainInit(args []string) {
     dir = "."
   }
 
-  dirstore := path.Join(dir, repo.DirStoreName)
+  dirstore := path.Join(dir, attrs.DirStoreName)
   os.Mkdir(dirstore, 0777)
 }
 
