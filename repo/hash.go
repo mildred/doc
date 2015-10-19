@@ -7,11 +7,8 @@ import (
   "crypto/sha1"
 
   mh "github.com/jbenet/go-multihash"
-  xattr "github.com/ivaxer/go-xattr"
+  attrs "github.com/mildred/doc/attrs"
 )
-
-const XATTR_CREATE  = 1
-const XATTR_REPLACE = 2
 
 const DirStoreName string = ".dirstore"
 const XattrHash string = "user.doc.multihash"
@@ -41,7 +38,7 @@ func HashFile(path string) (mh.Multihash, error) {
 }
 
 func GetHash(path string, info os.FileInfo) (mh.Multihash, error) {
-  hashTimeStr, err := xattr.Get(path, XattrHashTime)
+  hashTimeStr, err := attrs.Get(path, XattrHashTime)
   if err != nil {
     return HashFile(path)
   }
@@ -55,7 +52,7 @@ func GetHash(path string, info os.FileInfo) (mh.Multihash, error) {
     return HashFile(path)
   }
 
-  return xattr.Get(path, XattrHash)
+  return attrs.Get(path, XattrHash)
 }
 
 

@@ -9,7 +9,7 @@ import (
   "path/filepath"
 
   repo "github.com/mildred/doc/repo"
-  xattr "github.com/ivaxer/go-xattr"
+  attrs "github.com/mildred/doc/attrs"
   base58 "github.com/jbenet/go-base58"
 )
 
@@ -34,7 +34,7 @@ func mainCheck(args []string) {
       return nil
     }
 
-    hashTimeStr, err := xattr.Get(path, repo.XattrHashTime)
+    hashTimeStr, err := attrs.Get(path, repo.XattrHashTime)
     if err != nil {
       return nil
     }
@@ -47,7 +47,7 @@ func mainCheck(args []string) {
     timeEqual := hashTime == info.ModTime()
     if *opt_all || timeEqual {
 
-      hash, err := xattr.Get(path, repo.XattrHash)
+      hash, err := attrs.Get(path, repo.XattrHash)
       if err != nil {
         return err
       }

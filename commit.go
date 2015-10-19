@@ -9,7 +9,7 @@ import (
   "path/filepath"
 
   repo "github.com/mildred/doc/repo"
-  xattr "github.com/ivaxer/go-xattr"
+  attrs "github.com/mildred/doc/attrs"
   base58 "github.com/jbenet/go-base58"
 )
 
@@ -58,6 +58,7 @@ func mainCommit(args []string) {
 }
 
 func commitFile(path string, info os.FileInfo, force bool) ([]byte, error) {
+  var forced bool
   digest, err := repo.HashFile(path)
   if err != nil {
     return nil, err
@@ -65,49 +66,25 @@ func commitFile(path string, info os.FileInfo, force bool) ([]byte, error) {
 
   timeData := []byte(info.ModTime().Format(time.RFC3339Nano))
 
-  hash, err := xattr.Get(path, repo.XattrHash)
+  hash, err := attrs.Get(path, repo.XattrHash)
   if err != nil || !bytes.Equal(hash, digest) {
-    err = xattr.Set(path, repo.XattrHash, digest)
-    if err != nil && force && os.IsPermission(err) {
+    forced, err = attrs.SetForce(path, repo.XattrHash, digest, info, force)
+    if forced {
       fmt.Fprintf(os.Stderr, "%s: force write xattrs\n", path)
-      m := info.Mode()
-      e1 := os.Chmod(path, m | 0200)
-      if e1 != nil {
-        err = e1
-      } else {
-        digest, err = commitFile(path, info, false)
-        e2 := os.Chmod(path, m)
-        if e2 != nil {
-          err = e2
-        }
-      }
-    } else if err != nil {
-      return nil, err
     }
   } else {
     digest = nil
   }
 
-  hashTimeStr, err := xattr.Get(path, repo.XattrHashTime)
+  hashTimeStr, err := attrs.Get(path, repo.XattrHashTime)
   var hashTime time.Time
   if err == nil {
     hashTime, err = time.Parse(time.RFC3339Nano, string(hashTimeStr))
   }
   if err != nil || hashTime != info.ModTime() {
-    err = xattr.Set(path, repo.XattrHashTime, timeData)
-    if err != nil && force && os.IsPermission(err) {
+    forced, err = attrs.SetForce(path, repo.XattrHashTime, timeData, info, force)
+    if forced {
       fmt.Fprintf(os.Stderr, "%s: force write xattrs\n", path)
-      m := info.Mode()
-      e1 := os.Chmod(path, m | 0200)
-      if e1 != nil {
-        err = e1
-      } else {
-        digest, err = commitFile(path, info, false)
-        e2 := os.Chmod(path, m)
-        if e2 != nil {
-          err = e2
-        }
-      }
     }
   }
 

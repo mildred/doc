@@ -6,11 +6,11 @@ import (
   "syscall"
   "path/filepath"
 
-  xattr "github.com/ivaxer/go-xattr"
+  attrs "github.com/mildred/doc/attrs"
 )
 
 func ConflictFile(path string) string {
-  conflict, err := xattr.Get(path, XattrConflict)
+  conflict, err := attrs.Get(path, XattrConflict)
   if err != nil {
     return ""
   } else {
@@ -21,7 +21,7 @@ func ConflictFile(path string) string {
 func ConflictFileAlternatives(path string) []string {
   var alternatives []string
   for i := 0; true; i++ {
-    alt, err := xattr.Get(path, fmt.Sprintf("%s.%d", XattrConflict, i))
+    alt, err := attrs.Get(path, fmt.Sprintf("%s.%d", XattrConflict, i))
     if err == nil {
       alternatives = append(alternatives, string(alt))
     } else {
@@ -32,12 +32,12 @@ func ConflictFileAlternatives(path string) []string {
 }
 
 func MarkConflictFor(path, conflictName string) error {
-  return xattr.Set(path, XattrConflict, []byte(conflictName))
+  return attrs.Set(path, XattrConflict, []byte(conflictName))
 }
 
 func AddConflictAlternative(path, alternativeName string) error {
   for i := 0; true; i++ {
-    err := xattr.Setxattr(path, fmt.Sprintf("%s.%d", XattrConflict, i), []byte(alternativeName), XATTR_CREATE)
+    err := attrs.Create(path, fmt.Sprintf("%s.%d", XattrConflict, i), []byte(alternativeName))
     if err == nil {
       return nil
     } else if os.IsExist(err) || err == syscall.EEXIST {
