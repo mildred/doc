@@ -16,6 +16,7 @@ func init(){
     "help": mainHelp,
     "init": mainInit,
     "status": mainStatus,
+    "show": mainShow,
     "check": mainCheck,
     "commit": mainCommit,
     "cp": mainCopy,

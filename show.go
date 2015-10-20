@@ -1,0 +1,111 @@
+package main
+
+import (
+  "flag"
+  "fmt"
+  "os"
+  "time"
+  "bytes"
+  "path/filepath"
+
+  mh "github.com/jbenet/go-multihash"
+  repo "github.com/mildred/doc/repo"
+  attrs "github.com/mildred/doc/attrs"
+  base58 "github.com/jbenet/go-base58"
+)
+
+func mainShow(args []string) {
+  f := flag.NewFlagSet("status", flag.ExitOnError)
+  opt_check := f.Bool("c", false, "Run integrity check")
+  f.Parse(args)
+  dir := f.Arg(0)
+  if dir == "" {
+    dir = "."
+  }
+
+  status := 0
+  first := true
+
+  err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+    if err != nil {
+      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+      status = 1
+      return err
+    }
+
+    // Skip .dirstore/ at root
+    if filepath.Base(path) == attrs.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
+      return filepath.SkipDir
+    } else if ! info.Mode().IsRegular() {
+      return nil
+    }
+
+    if first {
+      first = false
+    } else {
+      fmt.Println()
+    }
+
+    fmt.Printf("File: %s\n", path)
+
+    if conflict := repo.ConflictFile(path); conflict != "" {
+      fmt.Printf("Conflict With: %s\n", conflict)
+    }
+
+    for _, alt := range repo.ConflictFileAlternatives(path) {
+      fmt.Printf("Conflict Alternatives: %s\n", alt)
+    }
+
+    var realHash mh.Multihash
+    if *opt_check {
+      realHash, err = repo.HashFile(path)
+      if err != nil {
+        fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+        return nil
+      }
+    }
+
+    hashTime, err := repo.GetHashTime(path)
+
+    if repo.IsNoData(err) {
+      if *opt_check {
+        fmt.Printf("Actual Hash: %s\n", base58.Encode(realHash))
+      }
+      fmt.Printf("Status: New\n")
+    } else {
+      if err != nil {
+        fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+        return nil
+      }
+
+      fmt.Printf("Hash Time: %v\n", hashTime.Format(time.RFC3339Nano))
+
+      hash, err := attrs.Get(path, repo.XattrHash)
+      if err != nil {
+        fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+        return nil
+      }
+      fmt.Printf("Recorded Hash: %s\n", base58.Encode(hash))
+      if *opt_check {
+        fmt.Printf("Actual Hash:   %s\n", base58.Encode(realHash))
+      }
+
+      if hashTime != info.ModTime() {
+        fmt.Printf("Status: Dirty\n")
+      } else if *opt_check && ! bytes.Equal(realHash, hash) {
+        fmt.Printf("Status: Corrupted\n")
+      } else {
+        fmt.Printf("Status: Clean\n")
+      }
+    }
+
+    return nil
+  })
+
+  if err != nil {
+    fmt.Fprintf(os.Stderr, "%v", err)
+    os.Exit(1)
+  }
+  os.Exit(status)
+}
+
