@@ -51,9 +51,9 @@ func copyEntry(src, dst string, dry_run bool) ([]string, error) {
   dsti, err := os.Stat(dst)
   if os.IsNotExist(err) {
     if dry_run {
-      fmt.Printf("cp -la %s %s\n", src, dst)
+      fmt.Printf("cp -a --reflink=auto %s %s\n", src, dst)
     } else {
-      err = exec.Command("cp", "-la", src, dst).Run()
+      err = exec.Command("cp", "-a", "--reflink=auto", src, dst).Run()
       if err != nil {
         return nil, fmt.Errorf("cp %s: %s", dst, err.Error())
       }
@@ -99,9 +99,9 @@ func copyEntry(src, dst string, dry_run bool) ([]string, error) {
 
     dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
     if dry_run {
-      fmt.Printf("cp -la %s %s\n", src, dstname)
+      fmt.Printf("cp -a --reflink=auto %s %s\n", src, dstname)
     } else {
-      err = exec.Command("cp", "-la", src, dstname).Run()
+      err = exec.Command("cp", "-a", "--reflink=auto", src, dstname).Run()
       if err != nil {
         return nil, fmt.Errorf("cp %s: %s", dstname, err.Error())
       }
