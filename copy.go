@@ -55,7 +55,7 @@ func copyEntry(src, dst string, dry_run bool) ([]string, error) {
     } else {
       err = exec.Command("cp", "-la", src, dst).Run()
       if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("cp %s: %s", dst, err.Error())
       }
     }
     return nil, nil
