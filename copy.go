@@ -15,6 +15,7 @@ import (
 func mainCopy(args []string) {
   f := flag.NewFlagSet("cp", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
+  opt_force   := f.Bool("f", false, "Force copy even if there are errors")
   f.Parse(args)
   src := f.Arg(0)
   dst := f.Arg(1)
@@ -28,18 +29,141 @@ func mainCopy(args []string) {
   }
 
   status := 0
-  conflicts, err := copyEntry(src, dst, *opt_dry_run)
+  actions, errors, totalBytes := prepareCopy(src, dst)
+
+  for _, e := range errors {
+    status = 1
+    fmt.Fprintf(os.Stderr, "%s\n", e.Error())
+  }
+
+  var conflicts []string
+
+  var execBytes uint64 = 0
+  bytescount := fmt.Sprintf("%d", len(fmt.Sprintf("%d", totalBytes)))
+
+  if len(errors) == 0 || *opt_force || *opt_dry_run {
+    for _, act := range actions {
+      if act.conflict {
+        conflicts = append(conflicts, act.dst)
+      }
+      if *opt_dry_run {
+        fmt.Println(act.show())
+      } else {
+        err := act.run()
+        execBytes += uint64(act.size)
+        if err != nil {
+          fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+          status = 1
+          if ! *opt_force {
+            break
+          }
+        } else {
+          fmt.Printf("\r\x1b[2K%" + bytescount + "d / %d (%2.0f%%) %s\r", execBytes, totalBytes, 100.0 * float64(execBytes) / float64(totalBytes), act.dst)
+        }
+      }
+    }
+  }
+  fmt.Println()
 
   for _, c := range conflicts {
     fmt.Fprintf(os.Stderr, "CONFLICT %s\n", c)
   }
 
+  os.Exit(status)
+}
+
+type copyAction struct {
+  src string
+  dst string
+  size int64
+  originaldst string
+  conflict bool
+}
+
+func (act *copyAction) show() string {
+  return fmt.Sprintf("cp -a --reflink=auto %s %s\n", act.src, act.dst)
+}
+
+func (act *copyAction) run() error {
+  err := exec.Command("cp", "-a", "--reflink=auto", act.src, act.dst).Run()
   if err != nil {
-    fmt.Fprintf(os.Stderr, "%v", err)
-    os.Exit(1)
+    return fmt.Errorf("cp %s: %s", act.dst, err.Error())
+  }
+  if act.conflict {
+    err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
+    if err != nil {
+      return err
+    }
+    err = repo.AddConflictAlternative(act.originaldst, filepath.Base(act.dst))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+}
+
+func prepareCopy(src, dst string) (actions []copyAction, errors []error, totalBytes uint64) {
+  totalBytes = 0
+
+  srci, err := os.Stat(src)
+  if err != nil {
+    errors = append(errors, err)
+    return
   }
 
-  os.Exit(status)
+  dsti, err := os.Stat(dst)
+  if os.IsNotExist(err) {
+    actions = append(actions, copyAction{src, dst, srci.Size(), "", false})
+    totalBytes = uint64(srci.Size())
+    return
+  } else if srci.IsDir() && dsti.IsDir() {
+    f, err := os.Open(src)
+    if err != nil {
+      errors = append(errors, err)
+      return
+    }
+    defer f.Close()
+    names, err := f.Readdirnames(-1)
+    if err != nil {
+      errors = append(errors, err)
+      return
+    }
+    for _, name := range names {
+      acts, errs, b := prepareCopy(filepath.Join(src, name), filepath.Join(dst, name))
+      if len(errs) > 0 {
+        errors = append(errors, errs...)
+      }
+      if len(acts) > 0 {
+        actions = append(actions, acts...)
+      }
+      totalBytes += b
+    }
+    return
+  } else {
+    var srch, dsth []byte
+    if ! srci.IsDir() {
+      srch, err = repo.GetHash(src, srci)
+      if err != nil {
+        errors = append(errors, err)
+        return
+      }
+    }
+    if ! dsti.IsDir() {
+      dsth, err = repo.GetHash(dst, dsti)
+      if err != nil {
+        errors = append(errors, err)
+        return
+      }
+    }
+    if bytes.Equal(srch, dsth) {
+      return
+    }
+
+    totalBytes = uint64(srci.Size())
+    dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
+    actions = append(actions, copyAction{src, dstname, srci.Size(), dst, true})
+    return
+  }
 }
 
 func copyEntry(src, dst string, dry_run bool) ([]string, error) {
