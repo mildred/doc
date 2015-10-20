@@ -72,9 +72,7 @@ func copyEntry(src, dst string, dry_run bool) ([]string, error) {
     }
     for _, name := range names {
       c, err := copyEntry(filepath.Join(src, name), filepath.Join(dst, name), dry_run)
-      if pe, ok := err.(*os.PathError); err != nil && ok {
-        fmt.Fprintf(os.Stderr, "%s: %s\n", filepath.Join(src, name), pe.Error())
-      } else if err != nil {
+      if err != nil {
         fmt.Fprintf(os.Stderr, "%s\n", err.Error())
       } else {
         conflicts = append(conflicts, c...)
@@ -105,7 +103,7 @@ func copyEntry(src, dst string, dry_run bool) ([]string, error) {
     } else {
       err = exec.Command("cp", "-la", src, dstname).Run()
       if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("cp %s: %s", dstname, err.Error())
       }
       err = repo.MarkConflictFor(dstname, filepath.Base(dst))
       if err != nil {
