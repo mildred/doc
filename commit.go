@@ -38,12 +38,14 @@ func mainCommit(args []string) {
       return nil
     }
 
-    digest, err := commitFile(path, info, *opt_force)
-    if err != nil {
-      status = 1
-      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
-    } else if digest != nil {
-      fmt.Printf("%s %s\n", base58.Encode(digest), path)
+    if info.Mode().IsRegular() {
+      digest, err := commitFile(path, info, *opt_force)
+      if err != nil {
+        status = 1
+        fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+      } else if digest != nil {
+        fmt.Printf("%s %s\n", base58.Encode(digest), path)
+      }
     }
 
     return nil
