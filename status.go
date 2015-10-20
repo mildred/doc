@@ -31,7 +31,7 @@ func mainStatus(args []string) {
     // Skip .dirstore/ at root
     if filepath.Base(path) == attrs.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
       return filepath.SkipDir
-    } else if info.IsDir() {
+    } else if ! info.Mode().IsRegular() {
       return nil
     }
 
