@@ -34,7 +34,7 @@ func mainCommit(args []string) {
     // Skip .dirstore/ at root
     if filepath.Base(path) == attrs.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
       return filepath.SkipDir
-    } else if info.IsDir() {
+    } else if info.IsDir() || ! info.Mode().IsRegular() {
       return nil
     }
 
@@ -44,7 +44,7 @@ func mainCommit(args []string) {
       return nil
     }
 
-    if info.Mode().IsRegular() && hashTime != info.ModTime() {
+    if err != nil || hashTime != info.ModTime() {
       digest, err := commitFile(path, info, *opt_force)
       if err != nil {
         status = 1
