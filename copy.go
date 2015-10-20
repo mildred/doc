@@ -9,6 +9,7 @@ import (
   "path/filepath"
 
   repo "github.com/mildred/doc/repo"
+  attrs "github.com/mildred/doc/attrs"
   base58 "github.com/jbenet/go-base58"
 )
 
@@ -88,6 +89,22 @@ func (act *copyAction) run() error {
   err := exec.Command("cp", "-a", "--reflink=auto", act.src, act.dst).Run()
   if err != nil {
     return fmt.Errorf("cp %s: %s", act.dst, err.Error())
+  }
+  hash, err := attrs.Get(act.src, repo.XattrHash)
+  if err != nil {
+    return err
+  }
+  hashTime, err := attrs.Get(act.src, repo.XattrHashTime)
+  if err != nil {
+    return err
+  }
+  err = attrs.Set(act.dst, repo.XattrHash, hash)
+  if err != nil {
+    return err
+  }
+  err = attrs.Set(act.dst, repo.XattrHashTime, hashTime)
+  if err != nil {
+    return err
   }
   if act.conflict {
     err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
