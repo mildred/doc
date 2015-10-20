@@ -73,7 +73,7 @@ func copyEntry(src, dst string, dry_run bool) ([]string, error) {
     for _, name := range names {
       c, err := copyEntry(filepath.Join(src, name), filepath.Join(dst, name), dry_run)
       if err != nil {
-        fmt.Fprintf(os.Stderr, "%s: %s\n", filepath.Join(src, name), err.Error())
+        fmt.Fprintf(os.Stderr, "%s\n", err.Error())
       } else {
         conflicts = append(conflicts, c...)
       }
