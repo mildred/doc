@@ -99,47 +99,50 @@ func getAttr(path, name string) ([]byte, error) {
 
 func Set(path, name string, value []byte) error {
 	err := xattr.Set(path, name, value)
-  if IsErrno(err, syscall.ENOTSUP) {
-  	err = setAttr(path, name, value, 0)
-  }
-  return err
+	if IsErrno(err, syscall.ENOTSUP) {
+		err = setAttr(path, name, value, 0)
+	}
+	return err
 }
 
 func Create(path, name string, value []byte) error {
 	err := xattr.Setxattr(path, name, value, XATTR_CREATE)
-  if IsErrno(err, syscall.ENOTSUP) {
-  	err = setAttr(path, name, value, os.O_CREATE | os.O_EXCL)
-  }
-  return err
+	if IsErrno(err, syscall.ENOTSUP) {
+		err = setAttr(path, name, value, os.O_CREATE | os.O_EXCL)
+	}
+	return err
 }
 
 func SetForce(path, name string, value []byte, info os.FileInfo, force bool) (bool, error) {
-  err := xattr.Set(path, name, value)
-  if IsErrno(err, syscall.ENOTSUP) {
-  	return false, setAttr(path, name, value, 0)
-  }
-  forced := false
-  if err != nil && force && os.IsPermission(err) {
-    m := info.Mode()
-    forced = true
-    e1 := os.Chmod(path, m | 0200)
-    if e1 != nil {
-      err = e1
-    } else {
-      err = xattr.Set(path, name, value)
-      e2 := os.Chmod(path, m)
-      if e2 != nil {
-        err = e2
-      }
-    }
-  }
-  return forced, err
+	err := xattr.Set(path, name, value)
+	if IsErrno(err, syscall.ENOTSUP) {
+		return false, setAttr(path, name, value, 0)
+	}
+	forced := false
+	if err != nil && force && os.IsPermission(err) {
+		m := info.Mode()
+		forced = true
+		e1 := os.Chmod(path, m | 0200)
+		if e1 != nil {
+			err = e1
+		} else {
+			err = xattr.Set(path, name, value)
+			e2 := os.Chmod(path, m)
+			if e2 != nil {
+				err = e2
+			}
+		}
+	}
+	return forced, err
 }
 
 func Get(path, name string) ([]byte, error) {
 	res, err := xattr.Get(path, name)
-  if IsErrno(err, syscall.ENOTSUP) {
+	if IsErrno(err, syscall.ENOTSUP) {
 		res, err = getAttr(path, name)
+		if err != nil {
+			err = syscall.ENODATA
+		}
 	}
 	return res, err
 }
