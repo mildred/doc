@@ -4,7 +4,6 @@ import (
   "flag"
   "fmt"
   "os"
-  "time"
   "path/filepath"
 
   repo "github.com/mildred/doc/repo"
@@ -42,15 +41,14 @@ func mainStatus(args []string) {
       conflict = " C"
     }
 
-    hashTimeStr, err := attrs.Get(path, repo.XattrHashTime)
-    if err != nil {
+    hashTime, err := repo.GetHashTime(path)
+    if repo.IsNoData(err) {
       if info.Mode() & os.FileMode(0200) == 0 {
         fmt.Printf("?%s (ro)\t%s\n", conflict, path)
       } else {
         fmt.Printf("?%s\t%s\n", conflict, path)
       }
     } else {
-      hashTime, err := time.Parse(time.RFC3339Nano, string(hashTimeStr))
       if err != nil {
         fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
         return nil

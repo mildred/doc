@@ -38,7 +38,13 @@ func mainCommit(args []string) {
       return nil
     }
 
-    if info.Mode().IsRegular() {
+    hashTime, err := repo.GetHashTime(path)
+    if err != nil && ! repo.IsNoData(err) {
+      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+      return nil
+    }
+
+    if info.Mode().IsRegular() && hashTime != info.ModTime() {
       digest, err := commitFile(path, info, *opt_force)
       if err != nil {
         status = 1

@@ -4,6 +4,7 @@ import (
   "os"
   "io"
   "time"
+  "syscall"
   "crypto/sha1"
 
   mh "github.com/jbenet/go-multihash"
@@ -14,6 +15,18 @@ const XattrHash string = "user.doc.multihash"
 const XattrHashTime string = "user.doc.multihash.time"
 const XattrConflict string = "user.doc.conflict"
 const XattrAlternative string = "user.doc.alternative"
+
+func IsNoData(err error) bool {
+  return attrs.IsErrno(err, syscall.ENODATA)
+}
+
+func GetHashTime(path string) (time.Time, error) {
+  hashTimeStr, err := attrs.Get(path, XattrHashTime)
+  if err != nil {
+    return time.Time{}, err
+  }
+  return time.Parse(time.RFC3339Nano, string(hashTimeStr))
+}
 
 func HashFile(path string) (mh.Multihash, error) {
   f, err := os.Open(path)
