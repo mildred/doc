@@ -25,7 +25,9 @@ Usage
 ### `doc init [DIR]`
 
 Creates a `.dirstore` directory in `DIR` or the current directory. This will be
-used to store PAR2 archives and possibly history information about each file.
+used to store PAR2 archives and possibly history information about each file (a
+checksum list to provide additional information for conflicts and
+synchronization of moved files, no yet implemented).
 
 ### `doc status [DIR]`
 
@@ -70,6 +72,13 @@ Future Usage
 
 Same as `cp` but the synchronisation is bidirectional. `sync` takes care not to
 copy over and over the conflict files.
+
+### `doc sync -from SRC [DEST]`, `doc sync -to DEST [SRC]`
+
+Same as `doc cp SRC DEST`, but for each new file copied from `SRC`, duplicates
+are searched in `DEST` and removed. The typical use case is when the `SRC` copy
+contains moved files. Those will also be moved in the `DEST` copy (provided they
+haven't changed).
 
 ### `doc resolve [-rm] FILE`
 
