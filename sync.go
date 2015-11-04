@@ -304,11 +304,16 @@ func prepareCopy(src, dst string, bidir bool) (actions []copyAction, errors []er
     return
   }
 
-  totalBytes = uint64(srci.Size())
-  dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-  actions = append(actions, copyAction{src, dstname, srci.Size(), dst, true})
+  totalBytes = 0
 
-  if bidir {
+  if repo.ConflictFile(src) == "" {
+    totalBytes += uint64(srci.Size())
+    dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
+    actions = append(actions, copyAction{src, dstname, srci.Size(), dst, true})
+  }
+
+  if bidir && repo.ConflictFile(dst) == "" {
+    totalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
     actions = append(actions, copyAction{dst, srcname, dsti.Size(), src, true})
   }

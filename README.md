@@ -65,13 +65,13 @@ For each modified file in `DIR` or the current directory, computes a checksum
 and store it in the extended attributes. A PAR2 archive is also created and
 stored separately in the `.dirstore` directory.
 
-Future Usage
-------------
-
 ### `doc sync [DIR1] DIR2`
 
 Same as `cp` but the synchronisation is bidirectional. `sync` takes care not to
 copy over and over the conflict files.
+
+Future Usage
+------------
 
 ### `doc sync -from SRC [DEST]`, `doc sync -to DEST [SRC]`
 
