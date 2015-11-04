@@ -92,6 +92,11 @@ to store PAR2 archives and possibly history information about each file.
 
 In filesystems where extended attributes are not available, it is also used to
 store the attributes about each inode.
+
+This directory doesn't store file paths, so you can move this directory freely.
+If your filesystem doesn't support extended attributes, don't store this
+directory on a different device (as inode numbers are used to associate files to
+attributes).
 `
 
 func mainInit(args []string) {
