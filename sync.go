@@ -15,6 +15,8 @@ import (
 
 const syncUsage string =
 `doc sync [OPTIONS...] [SRC] DEST
+doc sync [OPTIONS...] -from SRC [DEST]
+doc sync [OPTIONS...] -to DEST [SRC]
 
 Copy each files in SRC or the current directory over to DEST, and each of DEST
 over to SRC. Both arguments are assumed to be directories and the
@@ -36,6 +38,8 @@ Options:
 
 const copyUsage string =
 `doc cp [OPTIONS...] [SRC] DEST
+doc cp [OPTIONS...] -from SRC [DEST]
+doc cp [OPTIONS...] -to DEST [SRC]
 
 Copy each files in SRC or the current directory over to DEST. Both arguments are
 assumed to be directories and cp will synchronize from the source to the
@@ -57,22 +61,15 @@ func mainCopy(args []string) {
   f := flag.NewFlagSet("cp", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
   opt_force   := f.Bool("f", false, "Force copy even if there are errors")
+  opt_from    := f.String("from", "", "Specify the source directory")
+  opt_to      := f.String("to", "", "Specify the destination directory")
   f.Usage = func(){
     fmt.Print(copyUsage)
     f.PrintDefaults()
   }
   f.Parse(args)
-  src := f.Arg(0)
-  dst := f.Arg(1)
 
-  if src == "" && dst == "" {
-    fmt.Fprintln(os.Stderr, "You must specify at least the destination directory")
-    os.Exit(1)
-  } else if dst == "" {
-    dst = src
-    src = "."
-  }
-
+  src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
   syncOrCopy(src, dst, *opt_dry_run, *opt_force, false)
 }
 
@@ -80,23 +77,46 @@ func mainSync(args []string) {
   f := flag.NewFlagSet("sync", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
   opt_force   := f.Bool("f", false, "Force copy even if there are errors")
+  opt_from    := f.String("from", "", "Specify the source directory")
+  opt_to      := f.String("to", "", "Specify the destination directory")
   f.Usage = func(){
     fmt.Print(syncUsage)
     f.PrintDefaults()
   }
   f.Parse(args)
-  src := f.Arg(0)
-  dst := f.Arg(1)
 
+  src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
+  syncOrCopy(src, dst, *opt_dry_run, *opt_force, true)
+}
+
+func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst string) {
+  src = opt_src
+  dst = opt_dst
   if src == "" && dst == "" {
-    fmt.Fprintln(os.Stderr, "You must specify at least the destination directory")
-    os.Exit(1)
+    src = args[0]
+    dst = args[1]
+    if dst == "" {
+      dst = src
+      src = "."
+    }
+  } else if src == "" {
+    dst = args[0]
+    if dst == "" {
+      dst = "."
+    }
   } else if dst == "" {
-    dst = src
-    src = "."
+    src = args[0]
+    if src == "" {
+      src = "."
+    }
   }
 
-  syncOrCopy(src, dst, *opt_dry_run, *opt_force, true)
+  if src == "" || dst == "" {
+    fmt.Fprintln(os.Stderr, "You must specify at least the destination directory")
+    os.Exit(1)
+  }
+
+  return
 }
 
 func syncOrCopy(src, dst string, dry_run, force, bidir bool){
