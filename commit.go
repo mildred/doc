@@ -13,9 +13,22 @@ import (
   base58 "github.com/jbenet/go-base58"
 )
 
+const commitUsage string =
+`doc commit [OPTIONS...] [DIR]
+
+For each modified file in DIR or the current directory, computes a checksum and
+store it in the extended attributes.
+
+Options:
+`
+
 func mainCommit(args []string) {
-  f := flag.NewFlagSet("status", flag.ExitOnError)
+  f := flag.NewFlagSet("commit", flag.ExitOnError)
   opt_force := f.Bool("f", false, "Force writing xattrs on read only files")
+  f.Usage = func(){
+    fmt.Print(commitUsage)
+    f.PrintDefaults()
+  }
   f.Parse(args)
   dir := f.Arg(0)
   if dir == "" {

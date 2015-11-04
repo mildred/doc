@@ -10,8 +10,31 @@ import (
   attrs "github.com/mildred/doc/attrs"
 )
 
+const usageStatus string =
+`doc status [OPTIONS...] [DIR]
+
+Scan DIR or the current directory and display a list of new and modified files
+with a symbol describing its status:
+
+  ?     Untracked file
+  +     Modified file (mtime changed since lash hash)
+  *     Unsaved file (missing PAR2 information, not yet implemented)
+  C     Conflict (main filename)
+  c     Conflict (alternate file)
+
+Additionally, (ro) can appear if the file is read only, to notify that doc add
+will probably fail to set the extended attributes
+
+Options:
+`
+
 func mainStatus(args []string) {
   f := flag.NewFlagSet("status", flag.ExitOnError)
+  f.Bool("n", false, "Do not show files missing PAR2 redundency data")
+  f.Usage = func(){
+    fmt.Print(usageStatus)
+    f.PrintDefaults()
+  }
   f.Parse(args)
   dir := f.Arg(0)
   if dir == "" {

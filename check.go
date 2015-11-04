@@ -13,9 +13,23 @@ import (
   base58 "github.com/jbenet/go-base58"
 )
 
+const checkUsage string =
+`doc check [OPTIONS...] [DIR]
+
+Scan DIR or the current directory and check for non modified files their content
+compared to the stored checksum. If -a is specified, modified files are also
+shown.
+
+Options:
+`
+
 func mainCheck(args []string) {
   f := flag.NewFlagSet("status", flag.ExitOnError)
   opt_all := f.Bool("a", false, "Check all files, including modified")
+  f.Usage = func(){
+    fmt.Print(checkUsage)
+    f.PrintDefaults()
+  }
   f.Parse(args)
   dir := f.Arg(0)
   if dir == "" {

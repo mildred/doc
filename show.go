@@ -14,9 +14,23 @@ import (
   base58 "github.com/jbenet/go-base58"
 )
 
+const showUsage string =
+`doc show [OPTIONS...] FILE...
+
+Show information about each file presented, including its status, hash and
+conflict status. It can also run integrity check on the files. It is a more
+detailed version of doc status.
+
+Options:
+`
+
 func mainShow(args []string) {
-  f := flag.NewFlagSet("status", flag.ExitOnError)
+  f := flag.NewFlagSet("show", flag.ExitOnError)
   opt_check := f.Bool("c", false, "Run integrity check")
+  f.Usage = func(){
+    fmt.Print(showUsage)
+    f.PrintDefaults()
+  }
   f.Parse(args)
   dir := f.Arg(0)
   if dir == "" {

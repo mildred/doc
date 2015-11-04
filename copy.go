@@ -13,10 +13,33 @@ import (
   base58 "github.com/jbenet/go-base58"
 )
 
+const copyUsage string =
+`doc cp [OPTIONS...] [SRC] DEST
+
+Copy each files in SRC or the current directory over to DEST. Both arguments are
+assumed to be directories and cp will synchronize from the source to the
+destination in the following way:
+
+ *  Files from source not in the destination: the file is copied
+ 
+ *  Files from source existing in the destination with identical content: no
+    action is needed
+ 
+ *  Files from source existing in the destination with different content: the
+    file is copied under a new name, and a conflict is registred with the
+    original file in the destination directory.
+
+Options:
+`
+
 func mainCopy(args []string) {
   f := flag.NewFlagSet("cp", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
   opt_force   := f.Bool("f", false, "Force copy even if there are errors")
+  f.Usage = func(){
+    fmt.Print(copyUsage)
+    f.PrintDefaults()
+  }
   f.Parse(args)
   src := f.Arg(0)
   dst := f.Arg(1)
