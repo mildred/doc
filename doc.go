@@ -51,9 +51,17 @@ It allows you to track file modifications and identity. It can also save PAR2
 redundency information about each file (in case they become corrupt).
 
 List of available commands:
+
 `
 
-const helpText2 string = ``
+const helpText2 string = `
+You can get help on a command using the -h command line flag or by using the
+help command:
+
+        doc COMMAND -h
+        doc help COMMAND
+
+`
 
 func mainHelp(args []string) {
   if len(args) == 0 || args[0] == "help" {

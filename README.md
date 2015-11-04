@@ -87,3 +87,29 @@ information.
 Prune old PAR2 archives from `.dirstore` in `DIR` or the current directory.
 `.dirstore` must be a direct descendent of `DIR`.
 
+Installation
+============
+
+Installation is the same as for any go package. After you installed the go
+language tools, you have to export the `GOPATH` nvironment variable to an empty
+directory you have created for the occasion:
+
+        mkdir -p ~/Projects/go
+        echo 'export GOPATH="$HOME/Projects/go"' >> ~/.profile
+        export GOPATH="$HOME/Projects/go"
+
+Then, you gan get, build and install this package:
+
+        go get -u github.com/mildred/doc
+        go build github.com/mildred/doc
+        go install github.com/mildred/doc
+
+The resulting binary is installed in `GOPATH/bin`. You have to add it to your
+`PATH`:
+
+        echo 'export PATH="$PATH:$HOME/Projects/go/bin"' >> ~/.profile
+        export PATH="$PATH:$HOME/Projects/go/bin"
+
+You should then be able to run `doc`:
+
+        doc help
