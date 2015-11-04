@@ -22,6 +22,7 @@ func init(){
     "commit": mainCommit,
     "cp": mainCopy,
     "save": mainSave,
+    "dupes": mainDupes,
   }
 }
 
