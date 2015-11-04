@@ -15,7 +15,12 @@ const dupesUsage string =
 
 List duplicate files under the given directories (or the current directory if
 none given). Group of identical files are separated by a blank line. The number
-of detected links is shown in front of each file.
+of detected links is shown in front of each file. Modified files are not listed.
+
+WARNING: deduplication of identical files do not currently check that the files
+are exactly the same. it just checks that the recorded hash are identical. The
+file might have been modified since. You should run doc check on the duplicate
+files before you try to deduplicate them.
 
 Options:
 `
@@ -50,6 +55,16 @@ func mainDupes(args []string) {
 
   for _, src := range srcs {
     e := repo.Walk(src, func(path string, info os.FileInfo)error{
+
+      mtime, err := repo.GetHashTime(path)
+      if err != nil {
+        return err
+      }
+
+      // check that the file is up to date
+      if mtime != info.ModTime() {
+        return nil
+      }
 
       hash, err := repo.GetHash(path, info)
       if err != nil {
