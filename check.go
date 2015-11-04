@@ -20,6 +20,12 @@ Scan DIR or the current directory and check for non modified files their content
 compared to the stored checksum. If -a is specified, modified files are also
 shown.
 
+Symbols show the file status:
+
+  +     Modified file (mtime changed since lash hash)
+  =     Modified mtime (identical content but mtime updated)
+  !     Corrupt file (mtime identical but content changed)
+
 Options:
 `
 
