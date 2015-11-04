@@ -60,6 +60,7 @@ Options:
 func mainCopy(args []string) {
   f := flag.NewFlagSet("cp", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
+  opt_quiet   := f.Bool("q", false, "Quiet")
   opt_force   := f.Bool("f", false, "Force copy even if there are errors")
   opt_from    := f.String("from", "", "Specify the source directory")
   opt_to      := f.String("to", "", "Specify the destination directory")
@@ -70,12 +71,13 @@ func mainCopy(args []string) {
   f.Parse(args)
 
   src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  syncOrCopy(src, dst, *opt_dry_run, *opt_force, false)
+  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, false)
 }
 
 func mainSync(args []string) {
   f := flag.NewFlagSet("sync", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
+  opt_quiet   := f.Bool("q", false, "Quiet")
   opt_force   := f.Bool("f", false, "Force copy even if there are errors")
   opt_from    := f.String("from", "", "Specify the source directory")
   opt_to      := f.String("to", "", "Specify the destination directory")
@@ -86,7 +88,7 @@ func mainSync(args []string) {
   f.Parse(args)
 
   src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  syncOrCopy(src, dst, *opt_dry_run, *opt_force, true)
+  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, true)
 }
 
 func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst string) {
@@ -119,8 +121,8 @@ func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst str
   return
 }
 
-func syncOrCopy(src, dst string, dry_run, force, bidir bool){
-  actions, errors, totalBytes := prepareCopy(src, dst, true)
+func syncOrCopy(src, dst string, dry_run, force, quiet, bidir bool){
+  actions, errors, totalBytes := prepareCopy(src, dst, true, false)
 
   for _, e := range errors {
     fmt.Fprintf(os.Stderr, "%s\n", e.Error())
@@ -130,7 +132,7 @@ func syncOrCopy(src, dst string, dry_run, force, bidir bool){
   var nerrors int
 
   if len(errors) == 0 || force || dry_run {
-    conflicts, nerrors = performActions(actions, totalBytes, dry_run, force)
+    conflicts, nerrors = performActions(actions, totalBytes, dry_run, force, quiet)
     nerrors = nerrors + len(errors)
   }
 
@@ -189,7 +191,7 @@ func (act *copyAction) run() error {
   return nil
 }
 
-func prepareCopy(src, dst string, bidir bool) (actions []copyAction, errors []error, totalBytes uint64) {
+func prepareCopy(src, dst string, bidir, dedup bool) (actions []copyAction, errors []error, totalBytes uint64) {
   var err error
   totalBytes = 0
 
@@ -256,7 +258,7 @@ func prepareCopy(src, dst string, bidir bool) (actions []copyAction, errors []er
       if bidir {
         srcnames[name] = true
       }
-      acts, errs, b := prepareCopy(filepath.Join(src, name), filepath.Join(dst, name), bidir)
+      acts, errs, b := prepareCopy(filepath.Join(src, name), filepath.Join(dst, name), bidir, dedup)
       if len(errs) > 0 {
         errors = append(errors, errs...)
       }
@@ -284,7 +286,7 @@ func prepareCopy(src, dst string, bidir bool) (actions []copyAction, errors []er
         if srcnames[name] {
           continue
         }
-        acts, errs, b := prepareCopy(filepath.Join(src, name), filepath.Join(dst, name), bidir)
+        acts, errs, b := prepareCopy(filepath.Join(src, name), filepath.Join(dst, name), bidir, dedup)
         if len(errs) > 0 {
           errors = append(errors, errs...)
         }
@@ -341,7 +343,7 @@ func prepareCopy(src, dst string, bidir bool) (actions []copyAction, errors []er
   return
 }
 
-func performActions(actions []copyAction, totalBytes uint64, dry_run, force bool) (conflicts []string, nerrors int) {
+func performActions(actions []copyAction, totalBytes uint64, dry_run, force, quiet bool) (conflicts []string, nerrors int) {
   var execBytes uint64 = 0
   bytescount := fmt.Sprintf("%d", len(fmt.Sprintf("%d", totalBytes)))
 
@@ -360,12 +362,14 @@ func performActions(actions []copyAction, totalBytes uint64, dry_run, force bool
         if ! force {
           break
         }
-      } else {
+      } else if ! quiet {
         fmt.Printf("\r\x1b[2K%" + bytescount + "d / %d (%2.0f%%) %s\r", execBytes, totalBytes, 100.0 * float64(execBytes) / float64(totalBytes), act.dst)
       }
     }
   }
-  fmt.Println()
+  if ! quiet {
+    fmt.Println()
+  }
 
   return
 }
