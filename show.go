@@ -37,6 +37,8 @@ func mainShow(args []string) {
     dir = "."
   }
 
+  rep := repo.GetRepo(dir)
+
   status := 0
   first := true
 
@@ -99,17 +101,27 @@ func mainShow(args []string) {
         fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
         return nil
       }
-      fmt.Printf("Recorded Hash: %s\n", base58.Encode(hash))
+      var par2exists = false
+      if rep != nil {
+        par2exists, _ = rep.Par2Exists(hash)
+      }
+      fmt.Printf("Recorded Hash: %s (reduncency %s)\n", base58.Encode(hash), boolToAvailableStr(par2exists))
       if *opt_check {
-        fmt.Printf("Actual Hash:   %s\n", base58.Encode(realHash))
+        par2exists = false
+        if rep != nil {
+          par2exists, _ = rep.Par2Exists(realHash)
+        }
+        fmt.Printf("Actual Hash:   %s (redundency %s)\n", base58.Encode(realHash), boolToAvailableStr(par2exists))
       }
 
       if hashTime != info.ModTime() {
         fmt.Printf("Status: Dirty\n")
-      } else if *opt_check && ! bytes.Equal(realHash, hash) {
-        fmt.Printf("Status: Corrupted\n")
       } else {
-        fmt.Printf("Status: Clean\n")
+        if *opt_check && ! bytes.Equal(realHash, hash) {
+          fmt.Printf("Status: Corrupted\n")
+        } else {
+          fmt.Printf("Status: Clean\n")
+        }
       }
     }
 
@@ -121,5 +133,13 @@ func mainShow(args []string) {
     os.Exit(1)
   }
   os.Exit(status)
+}
+
+func boolToAvailableStr(b bool) string {
+  if b {
+    return "available"
+  } else {
+    return "unavailable"
+  }
 }
 

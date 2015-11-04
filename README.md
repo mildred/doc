@@ -57,6 +57,12 @@ destination in the following way:
   is copied under a new name, and a conflict is registred with the original file
   in the destination directory.
 
+### `doc save [DIR]`
+
+For each modified file in `DIR` or the current directory, computes a checksum
+and store it in the extended attributes. A PAR2 archive is also created and
+stored separately in the `.dirstore` directory.
+
 Future Usage
 ------------
 
@@ -75,12 +81,6 @@ file.
 
 Restore `FILE` or all corrupted files if `-a` is spcified using the PAR2
 information.
-
-### `doc save [DIR]`
-
-For each modified file in `DIR` or the current directory, computes a checksum
-and store it in the extended attributes. A PAR2 archive is also created and
-stored separately in the `.dirstore` directory.
 
 ### `doc prune n|-f [DIR]`
 

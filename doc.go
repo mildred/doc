@@ -21,6 +21,7 @@ func init(){
     "check": mainCheck,
     "commit": mainCommit,
     "cp": mainCopy,
+    "save": mainSave,
   }
 }
 

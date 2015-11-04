@@ -18,7 +18,7 @@ with a symbol describing its status:
 
   ?     Untracked file
   +     Modified file (mtime changed since lash hash)
-  *     Unsaved file (missing PAR2 information, not yet implemented)
+  *     Unsaved file (missing PAR2 information)
   C     Conflict (main filename)
   c     Conflict (alternate file)
 
@@ -30,7 +30,7 @@ Options:
 
 func mainStatus(args []string) {
   f := flag.NewFlagSet("status", flag.ExitOnError)
-  f.Bool("n", false, "Do not show files missing PAR2 redundency data")
+  opt_no_par2 := f.Bool("n", false, "Do not show files missing PAR2 redundency data")
   f.Usage = func(){
     fmt.Print(usageStatus)
     f.PrintDefaults()
@@ -40,6 +40,8 @@ func mainStatus(args []string) {
   if dir == "" {
     dir = "."
   }
+
+  rep := repo.GetRepo(dir)
 
   status := 0
 
@@ -71,17 +73,28 @@ func mainStatus(args []string) {
       } else {
         fmt.Printf("?%s\t%s\n", conflict, path)
       }
-    } else {
+      return nil
+    } else if err != nil {
+      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+      return nil
+    }
+
+    var redundency string = "*"
+    if rep != nil {
+      digest, err := repo.GetHash(path, info)
       if err != nil {
         fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
         return nil
       }
-
-      if hashTime != info.ModTime() {
-        fmt.Printf("+%s\t%s\n", conflict, path)
-      } else if conflict != "" {
-        fmt.Printf("%s\t%s\n", conflict, path)
+      if par2exists, _ := rep.Par2Exists(digest); par2exists {
+        redundency = ""
       }
+    }
+
+    if hashTime != info.ModTime() {
+      fmt.Printf("+%s%s\t%s\n", conflict, redundency, path)
+    } else if conflict != "" || (redundency != "" && !*opt_no_par2) {
+      fmt.Printf("%s%s\t%s\n", conflict, redundency, path)
     }
 
     return nil
