@@ -129,7 +129,7 @@ func SetForce(path, name string, value []byte, info os.FileInfo, force bool) (bo
 			err = xattr.Set(path, name, value)
 			e2 := os.Chmod(path, m)
 			if e2 != nil {
-				err = e2
+				panic(fmt.Errorf("%s: Could not chmod back to 0%o", path, m))
 			}
 		}
 	}
