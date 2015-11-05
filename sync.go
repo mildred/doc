@@ -22,16 +22,16 @@ Copy each files in SRC or the current directory over to DEST, and each of DEST
 over to SRC. Both arguments are assumed to be directories and the
 synchronisation will be according to the following rules:
 
- *  Files from source not in the destination: the file is copied
+  *     Files from source not in the destination: the file is copied
  
- *  Files not in source but in destination: the file is copied
+  *     Files not in source but in destination: the file is copied
  
- *  Files from source existing in the destination with identical content: no
-    action is needed
+  *     Files from source existing in the destination with identical content: no
+        action is needed
  
- *  Files from source existing in the destination with different content: the
-    file is copied under a new name in both directions (the original files are
-    kept) and a conflict is registered with the original files.
+  *     Files from source existing in the destination with different content:
+        the file is copied under a new name in both directions (the original
+        files are kept) and a conflict is registered with the original files.
 
 Options:
 `
@@ -45,14 +45,14 @@ Copy each files in SRC or the current directory over to DEST. Both arguments are
 assumed to be directories and cp will synchronize from the source to the
 destination in the following way:
 
- *  Files from source not in the destination: the file is copied
+  *     Files from source not in the destination: the file is copied
  
- *  Files from source existing in the destination with identical content: no
-    action is needed
+  *     Files from source existing in the destination with identical content: no
+        action is needed
  
- *  Files from source existing in the destination with different content: the
-    file is copied under a new name, and a conflict is registred with the
-    original file in the destination directory.
+  *     Files from source existing in the destination with different content:
+        the file is copied under a new name, and a conflict is registred with
+        the original file in the destination directory.
 
 Options:
 `
