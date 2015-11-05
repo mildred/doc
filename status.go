@@ -81,7 +81,7 @@ func mainStatus(args []string) {
 
     var redundency string = "*"
     if rep != nil {
-      digest, err := repo.GetHash(path, info)
+      digest, err := repo.GetHash(path, info, true)
       if err != nil {
         fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
         return nil

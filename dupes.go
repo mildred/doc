@@ -36,6 +36,7 @@ func mainDupes(args []string) {
   f := flag.NewFlagSet("dupes", flag.ExitOnError)
   opt_show_links := f.Bool("l", false, "Show group of files that share the same inode")
   opt_progress := f.Bool("p", false, "Show progress")
+  opt_hash := f.Bool("c", false, "Check real hash in case the file is updated")
   opt_dedup := f.Bool("d", false, "Deduplicate files (make links)")
   f.Usage = func(){
     fmt.Print(dupesUsage)
@@ -56,19 +57,12 @@ func mainDupes(args []string) {
   for _, src := range srcs {
     e := repo.Walk(src, func(path string, info os.FileInfo)error{
 
-      mtime, err := repo.GetHashTime(path)
+      hash, err := repo.GetHash(path, info, *opt_hash)
       if err != nil {
         return err
       }
-
-      // check that the file is up to date
-      if mtime != info.ModTime() {
+      if hash == nil {
         return nil
-      }
-
-      hash, err := repo.GetHash(path, info)
-      if err != nil {
-        return err
       }
 
       sys, ok := info.Sys().(*syscall.Stat_t)

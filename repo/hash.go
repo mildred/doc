@@ -49,7 +49,7 @@ func HashFile(path string) (mh.Multihash, error) {
   return digest, nil
 }
 
-func GetHash(path string, info os.FileInfo) (mh.Multihash, error) {
+func GetHash(path string, info os.FileInfo, compute bool) (mh.Multihash, error) {
   hashTimeStr, err := attrs.Get(path, XattrHashTime)
   if err != nil {
     return HashFile(path)
@@ -61,7 +61,11 @@ func GetHash(path string, info os.FileInfo) (mh.Multihash, error) {
   }
 
   if hashTime != info.ModTime() {
-    return HashFile(path)
+    if compute {
+      return HashFile(path)
+    } else {
+      return nil, nil
+    }
   }
 
   return attrs.Get(path, XattrHash)
