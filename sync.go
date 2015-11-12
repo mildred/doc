@@ -95,22 +95,29 @@ func mainSync(args []string) {
 }
 
 func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst string) {
+  var arg0, arg1 string
+  if len(args) > 0 {
+    arg0 = args[0]
+  }
+  if len(args) > 1 {
+    arg1 = args[1]
+  }
   src = opt_src
   dst = opt_dst
   if src == "" && dst == "" {
-    src = args[0]
-    dst = args[1]
+    src = arg0
+    dst = arg1
     if dst == "" {
       dst = src
       src = "."
     }
   } else if src == "" {
-    dst = args[0]
+    dst = arg0
     if dst == "" {
       dst = "."
     }
   } else if dst == "" {
-    src = args[0]
+    src = arg0
     if src == "" {
       src = "."
     }
