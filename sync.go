@@ -10,7 +10,6 @@ import (
 
   repo "github.com/mildred/doc/repo"
   attrs "github.com/mildred/doc/attrs"
-  base58 "github.com/jbenet/go-base58"
 )
 
 const syncUsage string =
@@ -180,11 +179,11 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_du
   }
 
   var conflicts []string
-  var nerrors int
+  var nerrors int = len(prep.errors)
   var dup_hashes [][]byte
 
   if ! quiet {
-    fmt.Printf("\nCopy: %d files (%d bytes)...\n\n\n", len(prep.actions), prep.totalBytes)
+    fmt.Printf("\nCopy: %d files (%d bytes)...\n\n\n\n\n", len(prep.actions), prep.totalBytes)
   }
 
   if len(prep.errors) == 0 || force || dry_run {
@@ -247,7 +246,7 @@ func (act *copyAction) run() error {
       return fmt.Errorf("link %s: %s", act.dst, err.Error())
     }
   } else {
-    cmd := exec.Command("cp", "-a", "--reflink=auto", act.src, act.dst)
+    cmd := exec.Command("cp", "-a", "--reflink=auto", "-d", act.src, act.dst)
     cmd.Stderr = os.Stderr
     err = cmd.Run()
     if err != nil {
@@ -255,28 +254,26 @@ func (act *copyAction) run() error {
     }
   }
   if ! act.noxattr {
-    hash, err := attrs.Get(act.src, repo.XattrHash)
-    if err != nil {
-      return err
-    }
-    hashTime, err := attrs.Get(act.src, repo.XattrHashTime)
-    if err != nil {
-      return err
-    }
-    err = attrs.Set(act.dst, repo.XattrHash, hash)
-    if err != nil {
-      return err
-    }
-    err = attrs.Set(act.dst, repo.XattrHashTime, hashTime)
-    if err != nil {
-      return err
-    }
     if act.conflict {
       err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
       if err != nil {
         return err
       }
       err = repo.AddConflictAlternative(act.originaldst, filepath.Base(act.dst))
+      if err != nil {
+        return err
+      }
+    }
+    hash, err := attrs.Get(act.src, repo.XattrHash)
+    if err == nil {
+      err = attrs.Set(act.dst, repo.XattrHash, hash)
+      if err != nil {
+        return err
+      }
+    }
+    hashTime, err := attrs.Get(act.src, repo.XattrHashTime)
+    if err == nil {
+      err = attrs.Set(act.dst, repo.XattrHashTime, hashTime)
       if err != nil {
         return err
       }
@@ -483,14 +480,18 @@ func (p *preparator) prepareCopy(src, dst string) {
 
   if repo.ConflictFile(src) == "" {
     p.totalBytes += uint64(srci.Size())
-    dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    p.actions = append(p.actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false, srcsymlink})
+    dstname := repo.FindConflictFileName(dst, srch)
+    if dstname != "" {
+      p.actions = append(p.actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false, srcsymlink})
+    }
   }
 
   if p.bidir && repo.ConflictFile(dst) == "" {
     p.totalBytes += uint64(dsti.Size())
-    srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    p.actions = append(p.actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink})
+    srcname := repo.FindConflictFileName(src, dsth)
+    if srcname != "" {
+      p.actions = append(p.actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink})
+    }
   }
 
   return
@@ -500,6 +501,9 @@ func performActions(actions []copyAction, totalBytes uint64, dry_run, force, qui
   var execBytes uint64 = 0
 
   for numact, act := range actions {
+    if ! quiet {
+      fmt.Printf("\r\x1b[5A\x1b[KCopy: %2.0f%% bytes: %d/%d, files: %d/%d\n\x1b[K      %s/\n\x1b[K      %s\n\x1b[K      %s/\n\x1b[K      %s\n", 100.0 * float64(execBytes) / float64(totalBytes), execBytes, totalBytes, numact+1, len(actions), filepath.Dir(act.src), filepath.Base(act.src), filepath.Dir(act.dst), filepath.Base(act.dst))
+    }
     if act.conflict {
       conflicts = append(conflicts, act.dst)
     }
@@ -521,8 +525,6 @@ func performActions(actions []copyAction, totalBytes uint64, dry_run, force, qui
         if ! force {
           break
         }
-      } else if ! quiet {
-        fmt.Printf("\r\x1b[2A\x1b[KCopy: %2.0f%% bytes: %d/%d, files: %d/%d\n\x1b[K      %s\n\x1b[K      %s\n", 100.0 * float64(execBytes) / float64(totalBytes), execBytes, totalBytes, numact+1, len(actions), filepath.Dir(act.dst), filepath.Base(act.dst))
       }
     }
   }

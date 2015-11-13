@@ -3,10 +3,12 @@ package repo
 import (
   "os"
   "fmt"
+  "bytes"
   "syscall"
   "path/filepath"
 
   attrs "github.com/mildred/doc/attrs"
+  base58 "github.com/jbenet/go-base58"
 )
 
 func ConflictFile(path string) string {
@@ -49,19 +51,28 @@ func AddConflictAlternative(path, alternativeName string) error {
   return nil
 }
 
-func FindConflictFileName(path, hashname string) string {
+// Return a conflict filename to use. Return the empty string if the conflict
+// file already exists for the same hash.
+func FindConflictFileName(path string, digest []byte) string {
+  hashname := base58.Encode(digest)
   hashext := ""
   if len(hashname) != 0 {
     hashext = "." + hashname
   }
   ext := filepath.Ext(path)
   dstname := fmt.Sprintf("%s%s%s", path, hashext, ext)
-  for i := 0; true; i++ {
-    if _, err := os.Lstat(dstname); os.IsNotExist(err) {
+  i := 0;
+  for {
+    info, err := os.Lstat(dstname)
+    if os.IsNotExist(err) {
       return dstname
     }
+    hash, err := GetHash(dstname, info, false)
+    if err == nil && bytes.Equal(hash, digest) {
+      return ""
+    }
     dstname = fmt.Sprintf("%s%s.%d%s", path, hashext, i, ext)
+    i++
   }
-  return dstname
 }
 
