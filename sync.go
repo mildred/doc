@@ -227,7 +227,8 @@ type copyAction struct {
   originaldst string
   conflict bool
   link bool
-  noxattr bool
+  srcMode os.FileMode
+  origDstMode os.FileMode
 }
 
 func (act *copyAction) show() string {
@@ -253,17 +254,21 @@ func (act *copyAction) run() error {
       return fmt.Errorf("cp %s: %s", act.dst, err.Error())
     }
   }
-  if ! act.noxattr {
-    if act.conflict {
+  if act.conflict {
+    if act.srcMode & os.ModeSymlink == 0 {
       err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
       if err != nil {
         return fmt.Errorf("%s: could not mark conflict: %s", act.dst, err.Error())
       }
+    }
+    if act.origDstMode & os.ModeSymlink == 0 {
       err = repo.AddConflictAlternative(act.originaldst, filepath.Base(act.dst))
       if err != nil {
         return fmt.Errorf("%s: could add conflict alternative: %s", act.dst, err.Error())
       }
     }
+  }
+  if act.srcMode & os.ModeSymlink == 0 {
     hash, err := attrs.Get(act.src, repo.XattrHash)
     if err == nil {
       err = attrs.Set(act.dst, repo.XattrHash, hash)
@@ -294,20 +299,25 @@ type preparator struct {
   numFiles uint64
 }
 
+func size(info os.FileInfo) int64 {
+  if info.Mode() & os.ModeSymlink != 0 {
+    return 0
+  }
+  // FIXME: size of directories
+  return info.Size();
+}
+
 func (p *preparator) prepareCopy(src, dst string) {
   var err error
 
   if !p.quiet {
     //fmt.Printf("\r\x1b[2K%6d files scanned, %9d bytes to copy: scanning %s", p.numFiles, p.totalBytes, filepath.Base(src));
-    fmt.Printf("\r\x1b[3A\x1b[KScan: %d files, %d bytes to copy\n\x1b[K      %s\n\x1b[K      %s\n\x1b[K", p.numFiles, p.totalBytes, filepath.Dir(src), filepath.Base(src));
+    fmt.Printf("\r\x1b[3A\x1b[KScan: %d files, %d bytes to copy in %d files\n\x1b[K      %s\n\x1b[K      %s\n\x1b[K", p.numFiles, p.totalBytes, len(p.actions), filepath.Dir(src), filepath.Base(src));
   }
   p.numFiles += 1
 
   srci, srcerr := os.Lstat(src)
   dsti, dsterr := os.Lstat(dst)
-
-  srcsymlink := srci != nil && srci.Mode() & os.ModeSymlink != 0
-  dstsymlink := dsti != nil && dsti.Mode() & os.ModeSymlink != 0
 
   //
   // File in source but not in destination
@@ -321,8 +331,8 @@ func (p *preparator) prepareCopy(src, dst string) {
       return
     }
 
-    p.actions = append(p.actions, copyAction{src, dst, srchash, srci.Size(), "", false, false, srcsymlink})
-    p.totalBytes += uint64(srci.Size())
+    p.actions = append(p.actions, copyAction{src, dst, srchash, size(srci), "", false, false, srci.Mode(), 0})
+    p.totalBytes += uint64(size(srci))
     return
 
   }
@@ -341,8 +351,8 @@ func (p *preparator) prepareCopy(src, dst string) {
         return
       }
 
-      p.actions = append(p.actions, copyAction{dst, src, dsthash, dsti.Size(), "", false, false, dstsymlink})
-      p.totalBytes += uint64(dsti.Size())
+      p.actions = append(p.actions, copyAction{dst, src, dsthash, size(dsti), "", false, false, dsti.Mode(), 0})
+      p.totalBytes += uint64(size(dsti))
       return
     }
 
@@ -443,7 +453,7 @@ func (p *preparator) prepareCopy(src, dst string) {
     if err == nil && srch == nil {
       if !p.quiet {
         hashingMsg = true
-        fmt.Printf(" (hashing)\r");
+        fmt.Printf("      (hashing)\r");
       }
       srch, err = repo.HashFile(src, srci)
       computed = true
@@ -461,7 +471,7 @@ func (p *preparator) prepareCopy(src, dst string) {
     computed := false
     if err == nil && dsth == nil {
       if !p.quiet && !hashingMsg {
-        fmt.Printf(" (hashing)\r");
+        fmt.Printf("      (hashing)\r");
       }
       dsth, err = repo.HashFile(dst, dsti)
       computed = true
@@ -479,18 +489,18 @@ func (p *preparator) prepareCopy(src, dst string) {
   }
 
   if repo.ConflictFile(src) == "" {
-    p.totalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, srch)
     if dstname != "" {
-      p.actions = append(p.actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false, srcsymlink})
+      p.totalBytes += uint64(size(srci))
+      p.actions = append(p.actions, copyAction{src, dstname, nil, size(srci), dst, true, false, srci.Mode(), dsti.Mode()})
     }
   }
 
   if p.bidir && repo.ConflictFile(dst) == "" {
-    p.totalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, dsth)
     if srcname != "" {
-      p.actions = append(p.actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink})
+      p.totalBytes += uint64(size(dsti))
+      p.actions = append(p.actions, copyAction{dst, srcname, nil, size(dsti), src, true, false, dsti.Mode(), srci.Mode()})
     }
   }
 
