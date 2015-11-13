@@ -257,25 +257,25 @@ func (act *copyAction) run() error {
     if act.conflict {
       err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
       if err != nil {
-        return err
+        return fmt.Errorf("%s: could not mark conflict: %s", act.dst, err.Error())
       }
       err = repo.AddConflictAlternative(act.originaldst, filepath.Base(act.dst))
       if err != nil {
-        return err
+        return fmt.Errorf("%s: could add conflict alternative: %s", act.dst, err.Error())
       }
     }
     hash, err := attrs.Get(act.src, repo.XattrHash)
     if err == nil {
       err = attrs.Set(act.dst, repo.XattrHash, hash)
       if err != nil {
-        return err
+        return fmt.Errorf("%s: could add xattr %s: %s", act.dst, repo.XattrHash, err.Error())
       }
     }
     hashTime, err := attrs.Get(act.src, repo.XattrHashTime)
     if err == nil {
       err = attrs.Set(act.dst, repo.XattrHashTime, hashTime)
       if err != nil {
-        return err
+        return fmt.Errorf("%s: could add xattr %s: %s", act.dst, repo.XattrHashTime, err.Error())
       }
     }
   }
