@@ -72,7 +72,7 @@ func mainCheck(args []string) {
         return err
       }
 
-      digest, err := repo.HashFile(path)
+      digest, err := repo.HashFile(path, info)
       if err != nil {
         return err
       }

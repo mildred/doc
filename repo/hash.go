@@ -29,7 +29,11 @@ func GetHashTime(path string) (time.Time, error) {
   return time.Parse(time.RFC3339Nano, string(hashTimeStr))
 }
 
-func HashFile(path string) (mh.Multihash, error) {
+func HashFile(path string, info os.FileInfo) (mh.Multihash, error) {
+  if info.Mode() & os.ModeSymlink != 0 {
+    return symlinkHash(path)
+  }
+
   f, err := os.Open(path)
   if err != nil {
     return nil, err
@@ -50,13 +54,37 @@ func HashFile(path string) (mh.Multihash, error) {
   return digest, nil
 }
 
+func symlinkHash(path string) (mh.Multihash, error) {
+  link, err := os.Readlink(path)
+  if err != nil {
+    return nil, err
+  }
+
+  hasher := sha1.New()
+  _, err = hasher.Write([]byte(link))
+  if err != nil {
+    panic(err);
+  }
+
+  return mh.Encode(hasher.Sum(nil), mh.SHA1)
+}
+
 // Return the hash for path stored in the xattrs. If the hash is out of date,
 // the hash is computed anew, unless `compute` is false in which case nil is
 // returned.
 func GetHash(path string, info os.FileInfo, compute bool) (mh.Multihash, error) {
+  if info.Mode() & os.ModeSymlink != 0 {
+    return symlinkHash(path)
+  }
+
   hashTimeStr, err := attrs.Get(path, XattrHashTime)
   if err != nil {
-    return HashFile(path)
+    if compute {
+      return HashFile(path, info)
+    } else {
+      // ignore error
+      return nil, nil
+    }
   }
 
   hashTime, err := time.Parse(time.RFC3339Nano, string(hashTimeStr))
@@ -66,7 +94,7 @@ func GetHash(path string, info os.FileInfo, compute bool) (mh.Multihash, error) 
 
   if hashTime != info.ModTime() {
     if compute {
-      return HashFile(path)
+      return HashFile(path, info)
     } else {
       return nil, nil
     }

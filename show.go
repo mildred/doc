@@ -74,7 +74,7 @@ func mainShow(args []string) {
 
     var realHash mh.Multihash
     if *opt_check {
-      realHash, err = repo.HashFile(path)
+      realHash, err = repo.HashFile(path, info)
       if err != nil {
         fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
         return nil

@@ -158,7 +158,7 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_du
   if ! quiet {
     fmt.Printf("Source:      %s\n", src)
     fmt.Printf("Destination: %s\n", dst)
-    fmt.Printf("Step 1: Prepare copy...\n")
+    fmt.Printf("\n\n\n\n")
   }
 
   prep := &preparator{
@@ -184,7 +184,7 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_du
   var dup_hashes [][]byte
 
   if ! quiet {
-    fmt.Printf("Step 2: Copy files...\n")
+    fmt.Printf("\nCopy: %d files (%d bytes)...\n\n\n", len(prep.actions), prep.totalBytes)
   }
 
   if len(prep.errors) == 0 || force || dry_run {
@@ -228,6 +228,7 @@ type copyAction struct {
   originaldst string
   conflict bool
   link bool
+  noxattr bool
 }
 
 func (act *copyAction) show() string {
@@ -246,35 +247,39 @@ func (act *copyAction) run() error {
       return fmt.Errorf("link %s: %s", act.dst, err.Error())
     }
   } else {
-    err = exec.Command("cp", "-a", "--reflink=auto", act.src, act.dst).Run()
+    cmd := exec.Command("cp", "-a", "--reflink=auto", act.src, act.dst)
+    cmd.Stderr = os.Stderr
+    err = cmd.Run()
     if err != nil {
       return fmt.Errorf("cp %s: %s", act.dst, err.Error())
     }
   }
-  hash, err := attrs.Get(act.src, repo.XattrHash)
-  if err != nil {
-    return err
-  }
-  hashTime, err := attrs.Get(act.src, repo.XattrHashTime)
-  if err != nil {
-    return err
-  }
-  err = attrs.Set(act.dst, repo.XattrHash, hash)
-  if err != nil {
-    return err
-  }
-  err = attrs.Set(act.dst, repo.XattrHashTime, hashTime)
-  if err != nil {
-    return err
-  }
-  if act.conflict {
-    err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
+  if ! act.noxattr {
+    hash, err := attrs.Get(act.src, repo.XattrHash)
     if err != nil {
       return err
     }
-    err = repo.AddConflictAlternative(act.originaldst, filepath.Base(act.dst))
+    hashTime, err := attrs.Get(act.src, repo.XattrHashTime)
     if err != nil {
       return err
+    }
+    err = attrs.Set(act.dst, repo.XattrHash, hash)
+    if err != nil {
+      return err
+    }
+    err = attrs.Set(act.dst, repo.XattrHashTime, hashTime)
+    if err != nil {
+      return err
+    }
+    if act.conflict {
+      err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
+      if err != nil {
+        return err
+      }
+      err = repo.AddConflictAlternative(act.originaldst, filepath.Base(act.dst))
+      if err != nil {
+        return err
+      }
     }
   }
   return nil
@@ -296,12 +301,16 @@ func (p *preparator) prepareCopy(src, dst string) {
   var err error
 
   if !p.quiet {
-    fmt.Printf("\r\x1b[2K%6d files scanned, %9d bytes to copy: scanning %s", p.numFiles, p.totalBytes, filepath.Base(src));
+    //fmt.Printf("\r\x1b[2K%6d files scanned, %9d bytes to copy: scanning %s", p.numFiles, p.totalBytes, filepath.Base(src));
+    fmt.Printf("\r\x1b[3A\x1b[KScan: %d files, %d bytes to copy\n\x1b[K      %s\n\x1b[K      %s\n\x1b[K", p.numFiles, p.totalBytes, filepath.Dir(src), filepath.Base(src));
   }
   p.numFiles += 1
 
-  srci, srcerr := os.Stat(src)
-  dsti, dsterr := os.Stat(dst)
+  srci, srcerr := os.Lstat(src)
+  dsti, dsterr := os.Lstat(dst)
+
+  srcsymlink := srci != nil && srci.Mode() & os.ModeSymlink != 0
+  dstsymlink := dsti != nil && dsti.Mode() & os.ModeSymlink != 0
 
   //
   // File in source but not in destination
@@ -315,7 +324,7 @@ func (p *preparator) prepareCopy(src, dst string) {
       return
     }
 
-    p.actions = append(p.actions, copyAction{src, dst, srchash, srci.Size(), "", false, false})
+    p.actions = append(p.actions, copyAction{src, dst, srchash, srci.Size(), "", false, false, srcsymlink})
     p.totalBytes += uint64(srci.Size())
     return
 
@@ -335,7 +344,7 @@ func (p *preparator) prepareCopy(src, dst string) {
         return
       }
 
-      p.actions = append(p.actions, copyAction{dst, src, dsthash, dsti.Size(), "", false, false})
+      p.actions = append(p.actions, copyAction{dst, src, dsthash, dsti.Size(), "", false, false, dstsymlink})
       p.totalBytes += uint64(dsti.Size())
       return
     }
@@ -439,7 +448,7 @@ func (p *preparator) prepareCopy(src, dst string) {
         hashingMsg = true
         fmt.Printf(" (hashing)\r");
       }
-      srch, err = repo.HashFile(src)
+      srch, err = repo.HashFile(src, srci)
       computed = true
     }
     if err == nil && computed && p.commit {
@@ -457,7 +466,7 @@ func (p *preparator) prepareCopy(src, dst string) {
       if !p.quiet && !hashingMsg {
         fmt.Printf(" (hashing)\r");
       }
-      dsth, err = repo.HashFile(dst)
+      dsth, err = repo.HashFile(dst, dsti)
       computed = true
     }
     if err == nil && computed && p.commit {
@@ -468,20 +477,20 @@ func (p *preparator) prepareCopy(src, dst string) {
       return
     }
   }
-  if bytes.Equal(srch, dsth) {
+  if bytes.Equal(srch, dsth) && srci.Mode() & os.ModeSymlink == dsti.Mode() & os.ModeSymlink {
     return
   }
 
   if repo.ConflictFile(src) == "" {
     p.totalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    p.actions = append(p.actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false})
+    p.actions = append(p.actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false, srcsymlink})
   }
 
   if p.bidir && repo.ConflictFile(dst) == "" {
     p.totalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    p.actions = append(p.actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false})
+    p.actions = append(p.actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink})
   }
 
   return
@@ -489,9 +498,8 @@ func (p *preparator) prepareCopy(src, dst string) {
 
 func performActions(actions []copyAction, totalBytes uint64, dry_run, force, quiet bool, dedup map[string][]string) (conflicts []string, nerrors int, duplicate_hashes [][]byte) {
   var execBytes uint64 = 0
-  bytescount := fmt.Sprintf("%d", len(fmt.Sprintf("%d", totalBytes)))
 
-  for _, act := range actions {
+  for numact, act := range actions {
     if act.conflict {
       conflicts = append(conflicts, act.dst)
     }
@@ -514,7 +522,7 @@ func performActions(actions []copyAction, totalBytes uint64, dry_run, force, qui
           break
         }
       } else if ! quiet {
-        fmt.Printf("\r\x1b[2K%" + bytescount + "d / %d (%2.0f%%) %s\r", execBytes, totalBytes, 100.0 * float64(execBytes) / float64(totalBytes), act.dst)
+        fmt.Printf("\r\x1b[2A\x1b[KCopy: %2.0f%% bytes: %d/%d, files: %d/%d\n\x1b[K      %s\n\x1b[K      %s\n", 100.0 * float64(execBytes) / float64(totalBytes), execBytes, totalBytes, numact+1, len(actions), filepath.Dir(act.dst), filepath.Base(act.dst))
       }
     }
   }
