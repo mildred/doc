@@ -5,11 +5,10 @@ import (
   "fmt"
   "os"
   "bytes"
-  "os/exec"
   "path/filepath"
 
+  sync "github.com/mildred/doc/sync"
   repo "github.com/mildred/doc/repo"
-  attrs "github.com/mildred/doc/attrs"
   base58 "github.com/jbenet/go-base58"
 )
 
@@ -220,65 +219,6 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_du
   }
 }
 
-type copyAction struct {
-  src string
-  dst string
-  dsthash []byte
-  size int64
-  originaldst string
-  conflict bool
-  link bool
-}
-
-func (act *copyAction) show() string {
-  if act.link {
-    return fmt.Sprintf("ln %s %s\n", act.src, act.dst)
-  } else {
-    return fmt.Sprintf("cp -a --reflink=auto %s %s\n", act.src, act.dst)
-  }
-}
-
-func (act *copyAction) run() error {
-  var err error
-  if act.link {
-    err = os.Link(act.src, act.dst)
-    if err != nil {
-      return fmt.Errorf("link %s: %s", act.dst, err.Error())
-    }
-  } else {
-    err = exec.Command("cp", "-a", "--reflink=auto", act.src, act.dst).Run()
-    if err != nil {
-      return fmt.Errorf("cp %s: %s", act.dst, err.Error())
-    }
-  }
-  hash, err := attrs.Get(act.src, repo.XattrHash)
-  if err != nil {
-    return err
-  }
-  hashTime, err := attrs.Get(act.src, repo.XattrHashTime)
-  if err != nil {
-    return err
-  }
-  err = attrs.Set(act.dst, repo.XattrHash, hash)
-  if err != nil {
-    return err
-  }
-  err = attrs.Set(act.dst, repo.XattrHashTime, hashTime)
-  if err != nil {
-    return err
-  }
-  if act.conflict {
-    err = repo.MarkConflictFor(act.dst, filepath.Base(act.originaldst))
-    if err != nil {
-      return err
-    }
-    err = repo.AddConflictAlternative(act.originaldst, filepath.Base(act.dst))
-    if err != nil {
-      return err
-    }
-  }
-  return nil
-}
 
 type preparator struct {
   check_hash bool
@@ -286,7 +226,7 @@ type preparator struct {
   quiet bool
   commit bool
   dedup map[string][]string
-  actions []copyAction
+  actions []sync.CopyAction
   errors []error
   totalBytes uint64
   numFiles uint64
@@ -315,7 +255,7 @@ func (p *preparator) prepareCopy(src, dst string) {
       return
     }
 
-    p.actions = append(p.actions, copyAction{src, dst, srchash, srci.Size(), "", false, false})
+    p.actions = append(p.actions, *sync.NewCopyAction(src, dst, srchash, srci.Size(), "", false, false))
     p.totalBytes += uint64(srci.Size())
     return
 
@@ -335,7 +275,7 @@ func (p *preparator) prepareCopy(src, dst string) {
         return
       }
 
-      p.actions = append(p.actions, copyAction{dst, src, dsthash, dsti.Size(), "", false, false})
+      p.actions = append(p.actions, *sync.NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false))
       p.totalBytes += uint64(dsti.Size())
       return
     }
@@ -475,38 +415,38 @@ func (p *preparator) prepareCopy(src, dst string) {
   if repo.ConflictFile(src) == "" {
     p.totalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    p.actions = append(p.actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false})
+    p.actions = append(p.actions, *sync.NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false))
   }
 
   if p.bidir && repo.ConflictFile(dst) == "" {
     p.totalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    p.actions = append(p.actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false})
+    p.actions = append(p.actions, *sync.NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false))
   }
 
   return
 }
 
-func performActions(actions []copyAction, totalBytes uint64, dry_run, force, quiet bool, dedup map[string][]string) (conflicts []string, nerrors int, duplicate_hashes [][]byte) {
+func performActions(actions []sync.CopyAction, totalBytes uint64, dry_run, force, quiet bool, dedup map[string][]string) (conflicts []string, nerrors int, duplicate_hashes [][]byte) {
   var execBytes uint64 = 0
   bytescount := fmt.Sprintf("%d", len(fmt.Sprintf("%d", totalBytes)))
 
   for _, act := range actions {
-    if act.conflict {
-      conflicts = append(conflicts, act.dst)
+    if act.Conflict {
+      conflicts = append(conflicts, act.Dst)
     }
-    if dedup != nil && act.dsthash != nil {
-      if files, ok := dedup[string(act.dsthash)]; ok && len(files) > 0 {
-        duplicate_hashes = append(duplicate_hashes, act.dsthash)
-        act.src = files[0]
-        act.link = true
+    if dedup != nil && act.Dsthash != nil {
+      if files, ok := dedup[string(act.Dsthash)]; ok && len(files) > 0 {
+        duplicate_hashes = append(duplicate_hashes, act.Dsthash)
+        act.Src = files[0]
+        act.Link = true
       }
     }
     if dry_run {
-      fmt.Println(act.show())
+      fmt.Println(act.Show())
     } else {
-      err := act.run()
-      execBytes += uint64(act.size)
+      err := act.Run()
+      execBytes += uint64(act.Size)
       if err != nil {
         fmt.Fprintf(os.Stderr, "%s\n", err.Error())
         nerrors = nerrors + 1
@@ -514,7 +454,7 @@ func performActions(actions []copyAction, totalBytes uint64, dry_run, force, qui
           break
         }
       } else if ! quiet {
-        fmt.Printf("\r\x1b[2K%" + bytescount + "d / %d (%2.0f%%) %s\r", execBytes, totalBytes, 100.0 * float64(execBytes) / float64(totalBytes), act.dst)
+        fmt.Printf("\r\x1b[2K%" + bytescount + "d / %d (%2.0f%%) %s\r", execBytes, totalBytes, 100.0 * float64(execBytes) / float64(totalBytes), act.Dst)
       }
     }
   }
