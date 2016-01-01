@@ -58,6 +58,14 @@ func Log(p *Preparator, src, dst string, hash_src, hash_dst bool) {
   }
 }
 
+func size(info os.FileInfo) int64 {
+  if info.Mode() & os.ModeSymlink != 0 {
+    return 0
+  }
+  // FIXME: size of directories
+  return info.Size();
+}
+
 func (p *Preparator) PrepareCopy(src, dst string) bool {
   var err error
 
@@ -68,9 +76,6 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 
   srci, srcerr := os.Lstat(src)
   dsti, dsterr := os.Lstat(dst)
-
-  srcsymlink := srci != nil && srci.Mode() & os.ModeSymlink != 0
-  dstsymlink := dsti != nil && dsti.Mode() & os.ModeSymlink != 0
 
   //
   // File in source but not in destination
@@ -87,8 +92,8 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
       }
     }
 
-    res := p.HandleAction(*NewCopyAction(src, dst, srchash, srci.Size(), "", false, false, srcsymlink))
-    p.TotalBytes += uint64(srci.Size())
+    res := p.HandleAction(*NewCopyAction(src, dst, srchash, size(srci), "", false, false, srci.Mode(), 0))
+    p.TotalBytes += uint64(size(srci))
     return res
 
   }
@@ -109,8 +114,8 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
         }
       }
 
-      res := p.HandleAction(*NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false, dstsymlink))
-      p.TotalBytes += uint64(dsti.Size())
+      res := p.HandleAction(*NewCopyAction(dst, src, dsthash, size(dsti), "", false, false, dsti.Mode(), 0))
+      p.TotalBytes += uint64(size(dsti))
       return res
     }
 
@@ -243,20 +248,20 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
   }
 
   if repo.ConflictFile(src) == "" {
-    p.TotalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, srch)
     if dstname != "" {
-      if ! p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false, srcsymlink)) {
+      p.TotalBytes += uint64(size(srci))
+      if ! p.HandleAction(*NewCopyAction(src, dstname, nil, size(srci), dst, true, false, srci.Mode(), dsti.Mode())) {
         return false
       }
     }
   }
 
   if p.Bidir && repo.ConflictFile(dst) == "" {
-    p.TotalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, dsth)
     if srcname != "" {
-      if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink)) {
+      p.TotalBytes += uint64(size(dsti))
+      if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, size(dsti), src, true, false, dsti.Mode(), srci.Mode())) {
         return false
       }
     }

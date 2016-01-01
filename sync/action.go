@@ -18,7 +18,8 @@ type CopyAction struct {
   OriginalDst string
   Conflict bool
   Link bool
-  NoXattr bool
+  SrcMode os.FileMode
+  OrigDstMode os.FileMode
 }
 
 func NewCopyAction(
@@ -29,8 +30,9 @@ func NewCopyAction(
   originaldst string,
   conflict bool,
   link bool,
-  noxattr bool) *CopyAction {
-  return &CopyAction{src, dst, dsthash, size, originaldst, conflict, link, noxattr}
+  srcMode os.FileMode,
+  origDstMode os.FileMode) *CopyAction {
+  return &CopyAction{src, dst, dsthash, size, originaldst, conflict, link, srcMode, origDstMode}
 }
 
 func (act *CopyAction) IsConflict() bool {
@@ -60,17 +62,21 @@ func (act *CopyAction) Run() error {
       return fmt.Errorf("cp %s: %s", act.Dst, err.Error())
     }
   }
-  if ! act.NoXattr {
-    if act.Conflict {
+  if act.Conflict {
+    if act.SrcMode & os.ModeSymlink == 0 {
       err = repo.MarkConflictFor(act.Dst, filepath.Base(act.OriginalDst))
       if err != nil {
         return fmt.Errorf("%s: could not mark conflict: %s", act.Dst, err.Error())
       }
+    }
+    if act.OrigDstMode & os.ModeSymlink == 0 {
       err = repo.AddConflictAlternative(act.OriginalDst, filepath.Base(act.Dst))
       if err != nil {
         return fmt.Errorf("%s: could add conflict alternative: %s", act.Dst, err.Error())
       }
     }
+  }
+  if act.SrcMode & os.ModeSymlink == 0 {
     hash, err := attrs.Get(act.Src, repo.XattrHash)
     if err == nil {
       err = attrs.Set(act.Dst, repo.XattrHash, hash)
