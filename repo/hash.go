@@ -81,9 +81,11 @@ func GetHash(path string, info os.FileInfo, compute bool) (mh.Multihash, error) 
   if err != nil {
     if compute {
       return HashFile(path, info)
-    } else {
+    } else if IsNoData(err) {
       // ignore error
       return nil, nil
+    } else {
+      return nil, err
     }
   }
 

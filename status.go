@@ -8,6 +8,7 @@ import (
 
   repo "github.com/mildred/doc/repo"
   attrs "github.com/mildred/doc/attrs"
+  base58 "github.com/jbenet/go-base58"
 )
 
 const usageStatus string =
@@ -31,6 +32,7 @@ Options:
 func mainStatus(args []string) {
   f := flag.NewFlagSet("status", flag.ExitOnError)
   opt_no_par2 := f.Bool("n", false, "Do not show files missing PAR2 redundency data")
+  opt_show_only_hash := f.Bool("c", false, "Show only unchanged committed files with their hash")
   f.Usage = func(){
     fmt.Print(usageStatus)
     f.PrintDefaults()
@@ -59,42 +61,56 @@ func mainStatus(args []string) {
       return nil
     }
 
-    var conflict string = ""
-    if repo.ConflictFile(path) != "" {
-      conflict = " c"
-    } else if len(repo.ConflictFileAlternatives(path)) > 0 {
-      conflict = " C"
-    }
-
-    hashTime, err := repo.GetHashTime(path)
-    if repo.IsNoData(err) {
-      if info.Mode() & os.FileMode(0200) == 0 {
-        fmt.Printf("?%s (ro)\t%s\n", conflict, path)
-      } else {
-        fmt.Printf("?%s\t%s\n", conflict, path)
-      }
-      return nil
-    } else if err != nil {
-      fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
-      return nil
-    }
-
-    var redundency string = "*"
-    if rep != nil {
-      digest, err := repo.GetHash(path, info, true)
+    if *opt_show_only_hash {
+      hash, err := repo.GetHash(path, info, false)
       if err != nil {
         fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
         return nil
       }
-      if par2exists, _ := rep.Par2Exists(digest); par2exists {
-        redundency = ""
-      }
-    }
 
-    if hashTime != info.ModTime() {
-      fmt.Printf("+%s%s\t%s\n", conflict, redundency, path)
-    } else if conflict != "" || (redundency != "" && !*opt_no_par2) {
-      fmt.Printf("%s%s\t%s\n", conflict, redundency, path)
+      if hash != nil {
+        fmt.Printf("%s\t%s\n", base58.Encode(hash), path)
+      }
+
+    } else {
+
+      var conflict string = ""
+      if repo.ConflictFile(path) != "" {
+        conflict = " c"
+      } else if len(repo.ConflictFileAlternatives(path)) > 0 {
+        conflict = " C"
+      }
+
+      hashTime, err := repo.GetHashTime(path)
+      if repo.IsNoData(err) {
+        if info.Mode() & os.FileMode(0200) == 0 {
+          fmt.Printf("?%s (ro)\t%s\n", conflict, path)
+        } else {
+          fmt.Printf("?%s\t%s\n", conflict, path)
+        }
+        return nil
+      } else if err != nil {
+        fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+        return nil
+      }
+
+      var redundency string = "*"
+      if rep != nil {
+        digest, err := repo.GetHash(path, info, true)
+        if err != nil {
+          fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+          return nil
+        }
+        if par2exists, _ := rep.Par2Exists(digest); par2exists {
+          redundency = ""
+        }
+      }
+
+      if hashTime != info.ModTime() {
+        fmt.Printf("+%s%s\t%s\n", conflict, redundency, path)
+      } else if conflict != "" || (redundency != "" && !*opt_no_par2) {
+        fmt.Printf("%s%s\t%s\n", conflict, redundency, path)
+      }
     }
 
     return nil
