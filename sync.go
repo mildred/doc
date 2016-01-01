@@ -33,6 +33,14 @@ synchronisation will be according to the following rules:
         the file is copied under a new name in both directions (the original
         files are kept) and a conflict is registered with the original files.
 
+Unless the force flag is specified, the operation will stop on the first error.
+
+The operatios is performed in two steps. The first step collects information
+about each file and deduce the action to perform, and the second step performs
+the actual copy. Interrupting the process during its first step leave your
+filesystem untouched. During this parsing step, if files are out of date, their
+hash will be computed and that can introduce a delay.
+
 Options:
 `
 
@@ -54,6 +62,14 @@ destination in the following way:
         the file is copied under a new name, and a conflict is registred with
         the original file in the destination directory.
 
+Unless the force flag is specified, the operation will stop on the first error.
+
+The operatios is performed in two steps. The first step collects information
+about each file and deduce the action to perform, and the second step performs
+the actual copy. Interrupting the process during its first step leave your
+filesystem untouched. During this parsing step, if files are out of date, their
+hash will be computed and that can introduce a delay.
+
 Options:
 `
 
@@ -67,6 +83,7 @@ func mainCopy(args []string) {
   opt_dd      := f.Bool("dd", false, "Like -d but also remove duplicate files")
   opt_from    := f.String("from", "", "Specify the source directory")
   opt_to      := f.String("to", "", "Specify the destination directory")
+  opt_commit  := f.Bool("commit", false, "Commit the new hash if it has been computed")
   f.Usage = func(){
     fmt.Print(copyUsage)
     f.PrintDefaults()
@@ -74,7 +91,7 @@ func mainCopy(args []string) {
   f.Parse(args)
 
   src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, *opt_dedup || *opt_dd, *opt_dd, *opt_hash, false)
+  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, *opt_commit, *opt_dedup || *opt_dd, *opt_dd, *opt_hash, false)
 }
 
 func mainSync(args []string) {
@@ -84,6 +101,7 @@ func mainSync(args []string) {
   opt_force   := f.Bool("f", false, "Force copy even if there are errors")
   opt_from    := f.String("from", "", "Specify the source directory")
   opt_to      := f.String("to", "", "Specify the destination directory")
+  opt_commit  := f.Bool("commit", false, "Commit the new hash if it has been computed")
   f.Usage = func(){
     fmt.Print(syncUsage)
     f.PrintDefaults()
@@ -91,7 +109,7 @@ func mainSync(args []string) {
   f.Parse(args)
 
   src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, false, false, false, true)
+  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, *opt_commit, false, false, false, true)
 }
 
 func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst string) {
@@ -111,12 +129,12 @@ func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst str
       dst = src
       src = "."
     }
-  } else if src == "" {
+  } else if dst == "" {
     dst = arg0
     if dst == "" {
       dst = "."
     }
-  } else if dst == "" {
+  } else if src == "" {
     src = arg0
     if src == "" {
       src = "."
@@ -131,15 +149,33 @@ func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst str
   return
 }
 
-func syncOrCopy(src, dst string, dry_run, force, quiet, dedup, delete_dup, check_hash, bidir bool){
+func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_dup, check_hash, bidir bool){
   var dedup_map map[string][]string = nil
   if dedup {
     dedup_map = map[string][]string{}
   }
 
-  actions, errors, totalBytes := prepareCopy(src, dst, check_hash, bidir, dedup_map)
+  if ! quiet {
+    fmt.Printf("Source:      %s\n", src)
+    fmt.Printf("Destination: %s\n", dst)
+    fmt.Printf("Step 1: Prepare copy...\n")
+  }
 
-  for _, e := range errors {
+  prep := &preparator{
+    check_hash: check_hash,
+    bidir: bidir,
+    quiet: quiet,
+    commit: commit,
+    dedup: dedup_map,
+  }
+
+  prep.prepareCopy(src, dst)
+
+  if ! quiet {
+    fmt.Printf("\x1b[2K")
+  }
+
+  for _, e := range prep.errors {
     fmt.Fprintf(os.Stderr, "%s\n", e.Error())
   }
 
@@ -147,9 +183,16 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, dedup, delete_dup, check
   var nerrors int
   var dup_hashes [][]byte
 
-  if len(errors) == 0 || force || dry_run {
-    conflicts, nerrors, dup_hashes = performActions(actions, totalBytes, dry_run, force, quiet, dedup_map)
-    nerrors = nerrors + len(errors)
+  if ! quiet {
+    fmt.Printf("Step 2: Copy files...\n")
+  }
+
+  if len(prep.errors) == 0 || force || dry_run {
+    if ! quiet && len(prep.errors) > 0 {
+      fmt.Printf("Errors found but continuing operation\n");
+    }
+    conflicts, nerrors, dup_hashes = performActions(prep.actions, prep.totalBytes, dry_run, force, quiet, dedup_map)
+    nerrors = nerrors + len(prep.errors)
   }
 
   if delete_dup {
@@ -237,9 +280,25 @@ func (act *copyAction) run() error {
   return nil
 }
 
-func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]string) (actions []copyAction, errors []error, totalBytes uint64) {
+type preparator struct {
+  check_hash bool
+  bidir bool
+  quiet bool
+  commit bool
+  dedup map[string][]string
+  actions []copyAction
+  errors []error
+  totalBytes uint64
+  numFiles uint64
+}
+
+func (p *preparator) prepareCopy(src, dst string) {
   var err error
-  totalBytes = 0
+
+  if !p.quiet {
+    fmt.Printf("\r\x1b[2K%6d files scanned, %9d bytes to copy: scanning %s", p.numFiles, p.totalBytes, filepath.Base(src));
+  }
+  p.numFiles += 1
 
   srci, srcerr := os.Stat(src)
   dsti, dsterr := os.Stat(dst)
@@ -250,14 +309,14 @@ func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]str
 
   if os.IsNotExist(dsterr) && srcerr == nil {
 
-    srchash, err := repo.GetHash(src, srci, dedup != nil)
+    srchash, err := repo.GetHash(src, srci, p.dedup != nil)
     if err != nil {
-      errors = append(errors, err)
+      p.errors = append(p.errors, err)
       return
     }
 
-    actions = append(actions, copyAction{src, dst, srchash, srci.Size(), "", false, false})
-    totalBytes = uint64(srci.Size())
+    p.actions = append(p.actions, copyAction{src, dst, srchash, srci.Size(), "", false, false})
+    p.totalBytes += uint64(srci.Size())
     return
 
   }
@@ -266,28 +325,28 @@ func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]str
   // [bidir] File in destination but not in source
   //
 
-  if (bidir || dedup != nil) && os.IsNotExist(srcerr) && dsterr == nil {
+  if (p.bidir || p.dedup != nil) && os.IsNotExist(srcerr) && dsterr == nil {
 
     // Synchronize in the other direction
-    if bidir {
-      dsthash, err := repo.GetHash(dst, dsti, dedup != nil)
+    if p.bidir {
+      dsthash, err := repo.GetHash(dst, dsti, p.dedup != nil)
       if err != nil {
-        errors = append(errors, err)
+        p.errors = append(p.errors, err)
         return
       }
 
-      actions = append(actions, copyAction{dst, src, dsthash, dsti.Size(), "", false, false})
-      totalBytes = uint64(dsti.Size())
+      p.actions = append(p.actions, copyAction{dst, src, dsthash, dsti.Size(), "", false, false})
+      p.totalBytes += uint64(dsti.Size())
       return
     }
 
     // Record dst hash in case we move it
-    if dedup != nil {
-      hash, err := repo.GetHash(dst, dsti, check_hash)
+    if p.dedup != nil {
+      hash, err := repo.GetHash(dst, dsti, p.check_hash)
       if err != nil {
-        errors = append(errors, err)
+        p.errors = append(p.errors, err)
       } else {
-        dedup[string(hash)] = append(dedup[string(hash)], dst)
+        p.dedup[string(hash)] = append(p.dedup[string(hash)], dst)
       }
     }
   }
@@ -297,12 +356,12 @@ func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]str
   //
 
   if srcerr != nil {
-    errors = append(errors, srcerr)
+    p.errors = append(p.errors, srcerr)
     return
   }
 
   if dsterr != nil {
-    errors = append(errors, dsterr)
+    p.errors = append(p.errors, dsterr)
     return
   }
 
@@ -314,47 +373,40 @@ func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]str
 
     var srcnames map[string]bool
 
-    if bidir {
+    if p.bidir {
       srcnames = map[string]bool{}
     }
 
     f, err := os.Open(src)
     if err != nil {
-      errors = append(errors, err)
+      p.errors = append(p.errors, err)
       return
     }
     defer f.Close()
     names, err := f.Readdirnames(-1)
     if err != nil {
-      errors = append(errors, err)
+      p.errors = append(p.errors, err)
       return
     }
 
     for _, name := range names {
-      if bidir {
+      if p.bidir {
         srcnames[name] = true
       }
-      acts, errs, b := prepareCopy(filepath.Join(src, name), filepath.Join(dst, name), check_hash, bidir, dedup)
-      if len(errs) > 0 {
-        errors = append(errors, errs...)
-      }
-      if len(acts) > 0 {
-        actions = append(actions, acts...)
-      }
-      totalBytes += b
+      p.prepareCopy(filepath.Join(src, name), filepath.Join(dst, name))
     }
 
-    if bidir {
+    if p.bidir {
 
       f, err := os.Open(dst)
       if err != nil {
-        errors = append(errors, err)
+        p.errors = append(p.errors, err)
         return
       }
       defer f.Close()
       dstnames, err := f.Readdirnames(-1)
       if err != nil {
-        errors = append(errors, err)
+        p.errors = append(p.errors, err)
         return
       }
 
@@ -362,14 +414,7 @@ func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]str
         if srcnames[name] {
           continue
         }
-        acts, errs, b := prepareCopy(filepath.Join(src, name), filepath.Join(dst, name), check_hash, bidir, dedup)
-        if len(errs) > 0 {
-          errors = append(errors, errs...)
-        }
-        if len(acts) > 0 {
-          actions = append(actions, acts...)
-        }
-        totalBytes += b
+        p.prepareCopy(filepath.Join(src, name), filepath.Join(dst, name))
       }
 
     }
@@ -383,18 +428,43 @@ func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]str
   // If hash is different, there is a conflict
   //
 
+  hashingMsg := false
+
   var srch, dsth []byte
   if ! srci.IsDir() {
-    srch, err = repo.GetHash(src, srci, true)
+    srch, err = repo.GetHash(src, srci, false)
+    computed := false
+    if err == nil && srch == nil {
+      if !p.quiet {
+        hashingMsg = true
+        fmt.Printf(" (hashing)\r");
+      }
+      srch, err = repo.HashFile(src)
+      computed = true
+    }
+    if err == nil && computed && p.commit {
+      _, err = repo.CommitFileHash(src, srci, srch, false)
+    }
     if err != nil {
-      errors = append(errors, err)
+      p.errors = append(p.errors, err)
       return
     }
   }
   if ! dsti.IsDir() {
-    dsth, err = repo.GetHash(dst, dsti, true)
+    dsth, err = repo.GetHash(dst, dsti, false)
+    computed := false
+    if err == nil && dsth == nil {
+      if !p.quiet && !hashingMsg {
+        fmt.Printf(" (hashing)\r");
+      }
+      dsth, err = repo.HashFile(dst)
+      computed = true
+    }
+    if err == nil && computed && p.commit {
+      _, err = repo.CommitFileHash(dst, dsti, dsth, false)
+    }
     if err != nil {
-      errors = append(errors, err)
+      p.errors = append(p.errors, err)
       return
     }
   }
@@ -402,18 +472,16 @@ func prepareCopy(src, dst string, check_hash, bidir bool, dedup map[string][]str
     return
   }
 
-  totalBytes = 0
-
   if repo.ConflictFile(src) == "" {
-    totalBytes += uint64(srci.Size())
+    p.totalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    actions = append(actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false})
+    p.actions = append(p.actions, copyAction{src, dstname, nil, srci.Size(), dst, true, false})
   }
 
-  if bidir && repo.ConflictFile(dst) == "" {
-    totalBytes += uint64(dsti.Size())
+  if p.bidir && repo.ConflictFile(dst) == "" {
+    p.totalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    actions = append(actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false})
+    p.actions = append(p.actions, copyAction{dst, srcname, nil, dsti.Size(), src, true, false})
   }
 
   return
