@@ -17,9 +17,6 @@ type Preparator struct {
   // destination and from destination to source.
   Bidir bool
 
-  // Don't print anything
-  Quiet bool
-
   // If true, commit new hash for out of date files
   Commit bool
 
@@ -30,20 +27,39 @@ type Preparator struct {
 
   Actions []CopyAction
   Errors []error
+
+  // Logger to be called for each scanned item
+  // Always called with hashing to false. When performing hashing, it is called
+  // a second or a third time with either hash_src or hash_dst set to true,
+  // depending on which file is being hashed.
+  Logger func(p *Preparator, src, dst string, hash_src, hash_dst bool)
+
+  // Total bytes scanned that can be counted (excluding directories)
   TotalBytes uint64
+
+  // Total items scanned
   NumFiles uint64
+
+  // for Log function
+  hashingMsg bool
 }
 
-func (p *Preparator) log(src, dst string) {
-  if !p.Quiet {
+func Log(p *Preparator, src, dst string, hash_src, hash_dst bool) {
+  if (hash_src || hash_dst) && !p.hashingMsg {
+    fmt.Printf(" (hashing)\r");
+    p.hashingMsg = true
+  } else {
     fmt.Printf("\r\x1b[2K%6d files scanned, %9d bytes to copy: scanning %s", p.NumFiles, p.TotalBytes, filepath.Base(src));
+    p.hashingMsg = false
   }
 }
 
 func (p *Preparator) PrepareCopy(src, dst string) {
   var err error
 
-  p.log(src, dst)
+  if p.Logger != nil {
+    p.Logger(p, src, dst, false, false)
+  }
   p.NumFiles += 1
 
   srci, srcerr := os.Stat(src)
@@ -174,16 +190,14 @@ func (p *Preparator) PrepareCopy(src, dst string) {
   // If hash is different, there is a conflict
   //
 
-  hashingMsg := false
 
   var srch, dsth []byte
   if ! srci.IsDir() {
     srch, err = repo.GetHash(src, srci, false)
     computed := false
     if err == nil && srch == nil {
-      if !p.Quiet {
-        hashingMsg = true
-        fmt.Printf(" (hashing)\r");
+      if p.Logger != nil {
+        p.Logger(p, src, dst, true, false)
       }
       srch, err = repo.HashFile(src)
       computed = true
@@ -200,8 +214,8 @@ func (p *Preparator) PrepareCopy(src, dst string) {
     dsth, err = repo.GetHash(dst, dsti, false)
     computed := false
     if err == nil && dsth == nil {
-      if !p.Quiet && !hashingMsg {
-        fmt.Printf(" (hashing)\r");
+      if p.Logger != nil {
+        p.Logger(p, src, dst, false, true)
       }
       dsth, err = repo.HashFile(dst)
       computed = true

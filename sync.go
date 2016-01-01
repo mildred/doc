@@ -159,9 +159,12 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_du
   prep := &sync.Preparator{
     CheckHash: check_hash,
     Bidir: bidir,
-    Quiet: quiet,
     Commit: commit,
     Dedup: dedup_map,
+  }
+
+  if ! quiet {
+    prep.Logger = sync.Log
   }
 
   prep.PrepareCopy(src, dst)
