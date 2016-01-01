@@ -2,7 +2,6 @@ package sync
 
 import (
   "os"
-  "fmt"
   "bytes"
   "path/filepath"
   "github.com/mildred/doc/repo"
@@ -46,16 +45,6 @@ type Preparator struct {
 
   // for Log function
   hashingMsg bool
-}
-
-func Log(p *Preparator, src, dst string, hash_src, hash_dst bool) {
-  if (hash_src || hash_dst) && !p.hashingMsg {
-    fmt.Printf(" (hashing)\r");
-    p.hashingMsg = true
-  } else {
-    fmt.Printf("\r\x1b[2K%6d files scanned, %9d bytes to copy: scanning %s", p.NumFiles, p.TotalBytes, filepath.Base(src));
-    p.hashingMsg = false
-  }
 }
 
 func size(info os.FileInfo) int64 {
@@ -251,7 +240,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
     dstname := repo.FindConflictFileName(dst, srch)
     if dstname != "" {
       p.TotalBytes += uint64(size(srci))
-      if ! p.HandleAction(*NewCopyAction(src, dstname, nil, size(srci), dst, true, false, srci.Mode(), dsti.Mode())) {
+      if ! p.HandleAction(*NewCopyAction(src, dstname, srch, size(srci), dst, true, false, srci.Mode(), dsti.Mode())) {
         return false
       }
     }
@@ -261,7 +250,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
     srcname := repo.FindConflictFileName(src, dsth)
     if srcname != "" {
       p.TotalBytes += uint64(size(dsti))
-      if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, size(dsti), src, true, false, dsti.Mode(), srci.Mode())) {
+      if ! p.HandleAction(*NewCopyAction(dst, srcname, dsth, size(dsti), src, true, false, dsti.Mode(), srci.Mode())) {
         return false
       }
     }

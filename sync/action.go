@@ -13,7 +13,7 @@ import (
 type CopyAction struct {
   Src string
   Dst string
-  Dsthash []byte
+  Hash []byte
   Size int64
   OriginalDst string
   Conflict bool
@@ -25,14 +25,14 @@ type CopyAction struct {
 func NewCopyAction(
   src string,
   dst string,
-  dsthash []byte,
+  hash []byte,
   size int64,
   originaldst string,
   conflict bool,
   link bool,
   srcMode os.FileMode,
   origDstMode os.FileMode) *CopyAction {
-  return &CopyAction{src, dst, dsthash, size, originaldst, conflict, link, srcMode, origDstMode}
+  return &CopyAction{src, dst, hash, size, originaldst, conflict, link, srcMode, origDstMode}
 }
 
 func (act *CopyAction) IsConflict() bool {
@@ -77,18 +77,29 @@ func (act *CopyAction) Run() error {
     }
   }
   if act.SrcMode & os.ModeSymlink == 0 {
-    hash, err := attrs.Get(act.Src, repo.XattrHash)
-    if err == nil {
-      err = attrs.Set(act.Dst, repo.XattrHash, hash)
+    if act.Hash != nil {
+      info, err := os.Lstat(act.Dst)
       if err != nil {
-        return fmt.Errorf("%s: could add xattr %s: %s", act.Dst, repo.XattrHash, err.Error())
+        return fmt.Errorf("%s: could add lstat: %s", act.Dst, err.Error())
       }
-    }
-    hashTime, err := attrs.Get(act.Src, repo.XattrHashTime)
-    if err == nil {
-      err = attrs.Set(act.Dst, repo.XattrHashTime, hashTime)
+      _, err = repo.CommitFileHash(act.Dst, info, act.Hash, false)
       if err != nil {
-        return fmt.Errorf("%s: could add xattr %s: %s", act.Dst, repo.XattrHashTime, err.Error())
+        return fmt.Errorf("%s: could not commit: %s", act.Dst, err.Error())
+      }
+    } else {
+      hash, err := attrs.Get(act.Src, repo.XattrHash)
+      if err == nil {
+        err = attrs.Set(act.Dst, repo.XattrHash, hash)
+        if err != nil {
+          return fmt.Errorf("%s: could add xattr %s: %s", act.Dst, repo.XattrHash, err.Error())
+        }
+      }
+      hashTime, err := attrs.Get(act.Src, repo.XattrHashTime)
+      if err == nil {
+        err = attrs.Set(act.Dst, repo.XattrHashTime, hashTime)
+        if err != nil {
+          return fmt.Errorf("%s: could add xattr %s: %s", act.Dst, repo.XattrHashTime, err.Error())
+        }
       }
     }
   }

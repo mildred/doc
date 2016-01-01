@@ -28,9 +28,9 @@ func (e *Executor) Execute(actions <-chan *CopyAction) (conflicts []string, dupl
     if act.Conflict {
       conflicts = append(conflicts, act.Dst)
     }
-    if e.Dedup != nil && act.Dsthash != nil {
-      if files, ok := e.Dedup[string(act.Dsthash)]; ok && len(files) > 0 {
-        duplicate_hashes = append(duplicate_hashes, act.Dsthash)
+    if e.Dedup != nil && act.Hash != nil && !act.Conflict {
+      if files, ok := e.Dedup[string(act.Hash)]; ok && len(files) > 0 {
+        duplicate_hashes = append(duplicate_hashes, act.Hash)
         act.Src = files[0]
         act.Link = true
       }
