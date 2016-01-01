@@ -25,8 +25,11 @@ type Preparator struct {
   // only).
   Dedup map[string][]string
 
-  Actions []CopyAction
-  Errors []error
+  // [MANDATORY] Called when an action is to be taken
+  HandleAction func(act CopyAction)
+
+  // [MANDATORY] Called when an error happens.
+  HandleError func (e error)
 
   // Logger to be called for each scanned item
   // Always called with hashing to false. When performing hashing, it is called
@@ -73,11 +76,11 @@ func (p *Preparator) PrepareCopy(src, dst string) {
 
     srchash, err := repo.GetHash(src, srci, p.Dedup != nil)
     if err != nil {
-      p.Errors = append(p.Errors, err)
+      p.HandleError(err)
       return
     }
 
-    p.Actions = append(p.Actions, *NewCopyAction(src, dst, srchash, srci.Size(), "", false, false))
+    p.HandleAction(*NewCopyAction(src, dst, srchash, srci.Size(), "", false, false))
     p.TotalBytes += uint64(srci.Size())
     return
 
@@ -93,11 +96,11 @@ func (p *Preparator) PrepareCopy(src, dst string) {
     if p.Bidir {
       dsthash, err := repo.GetHash(dst, dsti, p.Dedup != nil)
       if err != nil {
-        p.Errors = append(p.Errors, err)
+        p.HandleError(err)
         return
       }
 
-      p.Actions = append(p.Actions, *NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false))
+      p.HandleAction(*NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false))
       p.TotalBytes += uint64(dsti.Size())
       return
     }
@@ -106,7 +109,7 @@ func (p *Preparator) PrepareCopy(src, dst string) {
     if p.Dedup != nil {
       hash, err := repo.GetHash(dst, dsti, p.CheckHash)
       if err != nil {
-        p.Errors = append(p.Errors, err)
+        p.HandleError(err)
       } else {
         p.Dedup[string(hash)] = append(p.Dedup[string(hash)], dst)
       }
@@ -118,12 +121,12 @@ func (p *Preparator) PrepareCopy(src, dst string) {
   //
 
   if srcerr != nil {
-    p.Errors = append(p.Errors, srcerr)
+    p.HandleError(srcerr)
     return
   }
 
   if dsterr != nil {
-    p.Errors = append(p.Errors, dsterr)
+    p.HandleError(dsterr)
     return
   }
 
@@ -141,13 +144,13 @@ func (p *Preparator) PrepareCopy(src, dst string) {
 
     f, err := os.Open(src)
     if err != nil {
-      p.Errors = append(p.Errors, err)
+      p.HandleError(err)
       return
     }
     defer f.Close()
     names, err := f.Readdirnames(-1)
     if err != nil {
-      p.Errors = append(p.Errors, err)
+      p.HandleError(err)
       return
     }
 
@@ -162,13 +165,13 @@ func (p *Preparator) PrepareCopy(src, dst string) {
 
       f, err := os.Open(dst)
       if err != nil {
-        p.Errors = append(p.Errors, err)
+        p.HandleError(err)
         return
       }
       defer f.Close()
       dstnames, err := f.Readdirnames(-1)
       if err != nil {
-        p.Errors = append(p.Errors, err)
+        p.HandleError(err)
         return
       }
 
@@ -206,7 +209,7 @@ func (p *Preparator) PrepareCopy(src, dst string) {
       _, err = repo.CommitFileHash(src, srci, srch, false)
     }
     if err != nil {
-      p.Errors = append(p.Errors, err)
+      p.HandleError(err)
       return
     }
   }
@@ -224,7 +227,7 @@ func (p *Preparator) PrepareCopy(src, dst string) {
       _, err = repo.CommitFileHash(dst, dsti, dsth, false)
     }
     if err != nil {
-      p.Errors = append(p.Errors, err)
+      p.HandleError(err)
       return
     }
   }
@@ -235,13 +238,13 @@ func (p *Preparator) PrepareCopy(src, dst string) {
   if repo.ConflictFile(src) == "" {
     p.TotalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    p.Actions = append(p.Actions, *NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false))
+    p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false))
   }
 
   if p.Bidir && repo.ConflictFile(dst) == "" {
     p.TotalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    p.Actions = append(p.Actions, *NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false))
+    p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false))
   }
 
   return

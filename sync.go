@@ -167,13 +167,23 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_du
     prep.Logger = sync.Log
   }
 
+  var errors []error
+  prep.HandleError = func(e error) {
+    errors = append(errors, e)
+  }
+
+  var actions []sync.CopyAction
+  prep.HandleAction = func(act sync.CopyAction) {
+    actions = append(actions, act)
+  }
+
   prep.PrepareCopy(src, dst)
 
   if ! quiet {
     fmt.Printf("\x1b[2K")
   }
 
-  for _, e := range prep.Errors {
+  for _, e := range errors {
     fmt.Fprintf(os.Stderr, "%s\n", e.Error())
   }
 
@@ -185,12 +195,12 @@ func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_du
     fmt.Printf("Step 2: Copy files...\n")
   }
 
-  if len(prep.Errors) == 0 || force || dry_run {
-    if ! quiet && len(prep.Errors) > 0 {
+  if len(errors) == 0 || force || dry_run {
+    if ! quiet && len(errors) > 0 {
       fmt.Printf("Errors found but continuing operation\n");
     }
-    conflicts, nerrors, dup_hashes = performActions(prep.Actions, prep.TotalBytes, dry_run, force, quiet, dedup_map)
-    nerrors = nerrors + len(prep.Errors)
+    conflicts, nerrors, dup_hashes = performActions(actions, prep.TotalBytes, dry_run, force, quiet, dedup_map)
+    nerrors = nerrors + len(errors)
   }
 
   if delete_dup {
