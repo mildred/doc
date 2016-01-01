@@ -78,7 +78,7 @@ func mainCommit(args []string) {
 
 func commitFile(path string, info os.FileInfo, force bool) ([]byte, error) {
   var forced bool
-  digest, err := repo.HashFile(path)
+  digest, err := repo.HashFile(path, info)
   if err != nil {
     return nil, err
   }

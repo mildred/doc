@@ -18,6 +18,7 @@ type CopyAction struct {
   OriginalDst string
   Conflict bool
   Link bool
+  NoXattr bool
 }
 
 func NewCopyAction(
@@ -27,8 +28,9 @@ func NewCopyAction(
   size int64,
   originaldst string,
   conflict bool,
-  link bool) *CopyAction {
-  return &CopyAction{src, dst, dsthash, size, originaldst, conflict, link}
+  link bool,
+  noxattr bool) *CopyAction {
+  return &CopyAction{src, dst, dsthash, size, originaldst, conflict, link, noxattr}
 }
 
 func (act *CopyAction) IsConflict() bool {
@@ -51,35 +53,39 @@ func (act *CopyAction) Run() error {
       return fmt.Errorf("link %s: %s", act.Dst, err.Error())
     }
   } else {
-    err = exec.Command("cp", "-a", "--reflink=auto", act.Src, act.Dst).Run()
+    cmd := exec.Command("cp", "-a", "--reflink=auto", act.Src, act.Dst)
+    cmd.Stderr = os.Stderr
+    err = cmd.Run()
     if err != nil {
       return fmt.Errorf("cp %s: %s", act.Dst, err.Error())
     }
   }
-  hash, err := attrs.Get(act.Src, repo.XattrHash)
-  if err != nil {
-    return err
-  }
-  hashTime, err := attrs.Get(act.Src, repo.XattrHashTime)
-  if err != nil {
-    return err
-  }
-  err = attrs.Set(act.Dst, repo.XattrHash, hash)
-  if err != nil {
-    return err
-  }
-  err = attrs.Set(act.Dst, repo.XattrHashTime, hashTime)
-  if err != nil {
-    return err
-  }
-  if act.Conflict {
-    err = repo.MarkConflictFor(act.Dst, filepath.Base(act.OriginalDst))
+  if ! act.NoXattr {
+    hash, err := attrs.Get(act.Src, repo.XattrHash)
     if err != nil {
       return err
     }
-    err = repo.AddConflictAlternative(act.OriginalDst, filepath.Base(act.Dst))
+    hashTime, err := attrs.Get(act.Src, repo.XattrHashTime)
     if err != nil {
       return err
+    }
+    err = attrs.Set(act.Dst, repo.XattrHash, hash)
+    if err != nil {
+      return err
+    }
+    err = attrs.Set(act.Dst, repo.XattrHashTime, hashTime)
+    if err != nil {
+      return err
+    }
+    if act.Conflict {
+      err = repo.MarkConflictFor(act.Dst, filepath.Base(act.OriginalDst))
+      if err != nil {
+        return err
+      }
+      err = repo.AddConflictAlternative(act.OriginalDst, filepath.Base(act.Dst))
+      if err != nil {
+        return err
+      }
     }
   }
   return nil

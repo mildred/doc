@@ -24,12 +24,12 @@ func IsErrno(err, errno error) bool {
 
 func FindDirStore(path string) string {
 	res := filepath.Join(path, DirStoreName)
-	_, err := os.Stat(path)
+	_, err := os.Lstat(path)
 	if err != nil {
 		return ""
 	}
 
-	_, err = os.Stat(res)
+	_, err = os.Lstat(res)
 	if err != nil {
 		return FindDirStore(filepath.Join(path, ".."))
 	}
@@ -38,7 +38,7 @@ func FindDirStore(path string) string {
 }
 
 func findAttrFile(path, name string) (string, os.FileMode, error) {
-	st, err := os.Stat(path)
+	st, err := os.Lstat(path)
 	if err != nil {
 		return "", 0, err
 	}

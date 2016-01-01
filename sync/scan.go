@@ -67,8 +67,11 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
   }
   p.NumFiles += 1
 
-  srci, srcerr := os.Stat(src)
-  dsti, dsterr := os.Stat(dst)
+  srci, srcerr := os.Lstat(src)
+  dsti, dsterr := os.Lstat(dst)
+
+  srcsymlink := srci != nil && srci.Mode() & os.ModeSymlink != 0
+  dstsymlink := dsti != nil && dsti.Mode() & os.ModeSymlink != 0
 
   //
   // File in source but not in destination
@@ -85,7 +88,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
       }
     }
 
-    res := p.HandleAction(*NewCopyAction(src, dst, srchash, srci.Size(), "", false, false))
+    res := p.HandleAction(*NewCopyAction(src, dst, srchash, srci.Size(), "", false, false, srcsymlink))
     p.TotalBytes += uint64(srci.Size())
     return res
 
@@ -107,7 +110,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
         }
       }
 
-      res := p.HandleAction(*NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false))
+      res := p.HandleAction(*NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false, dstsymlink))
       p.TotalBytes += uint64(dsti.Size())
       return res
     }
@@ -209,7 +212,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
       if p.Logger != nil {
         p.Logger(p, src, dst, true, false)
       }
-      srch, err = repo.HashFile(src)
+      srch, err = repo.HashFile(src, srci)
       computed = true
     }
     if err == nil && computed && p.Commit {
@@ -226,7 +229,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
       if p.Logger != nil {
         p.Logger(p, src, dst, false, true)
       }
-      dsth, err = repo.HashFile(dst)
+      dsth, err = repo.HashFile(dst, dsti)
       computed = true
     }
     if err == nil && computed && p.Commit {
@@ -236,14 +239,14 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
       return p.HandleError(err)
     }
   }
-  if bytes.Equal(srch, dsth) {
+  if bytes.Equal(srch, dsth) && srci.Mode() & os.ModeSymlink == dsti.Mode() & os.ModeSymlink {
     return true
   }
 
   if repo.ConflictFile(src) == "" {
     p.TotalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    if ! p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false)) {
+    if ! p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false, srcsymlink)) {
       return false
     }
   }
@@ -251,7 +254,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
   if p.Bidir && repo.ConflictFile(dst) == "" {
     p.TotalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false)) {
+    if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink)) {
       return false
     }
   }

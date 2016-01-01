@@ -172,4 +172,3 @@ func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst str
   return
 }
 
-

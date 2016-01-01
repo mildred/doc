@@ -56,6 +56,10 @@ func mainDupes(args []string) {
 
   for _, src := range srcs {
     e := repo.Walk(src, func(path string, info os.FileInfo)error{
+      // Skip symlinks
+      if info.Mode() & os.ModeSymlink != 0 {
+        return nil
+      }
 
       hash, err := repo.GetHash(path, info, *opt_hash)
       if err != nil {

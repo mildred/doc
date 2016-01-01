@@ -122,3 +122,30 @@ The resulting binary is installed in `GOPATH/bin`. You have to add it to your
 You should then be able to run `doc`:
 
         doc help
+
+Bugs
+====
+
+- cp, sync: Traversing symlinks without cycle detection
+
+- cp, sync: Shold not perform a Stat() on the files but a Lstat() to avoid
+  following symlinks.
+
+- cp, sync: have a continuous mode where scanning is performed in a goroutine
+  that will send action to aother goroutine that will do the actual copy. Have a
+  multi-line status that updates itself like:
+
+        Scan: 94369 files scanned, 128746389 bytes
+              path/trunc/to/80/char
+              very-long-filename...last-10-chars.jpeg
+        Copy: [======>           ] 34%
+              884/8991 files, 78954/789563 bytes
+              path/being/copied
+              filename
+
+  Truncate filenames by keeping the first characters, the ellipsis and the last
+  10 characters (to include the extension). Pathnames should be truncated so
+  they would fit a 80 character line, each path item should be truncated
+  identically.
+
+  The sequential mode should still be kept there.

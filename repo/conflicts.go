@@ -57,7 +57,7 @@ func FindConflictFileName(path, hashname string) string {
   ext := filepath.Ext(path)
   dstname := fmt.Sprintf("%s%s%s", path, hashext, ext)
   for i := 0; true; i++ {
-    if _, err := os.Stat(dstname); os.IsNotExist(err) {
+    if _, err := os.Lstat(dstname); os.IsNotExist(err) {
       return dstname
     }
     dstname = fmt.Sprintf("%s%s.%d%s", path, hashext, i, ext)
