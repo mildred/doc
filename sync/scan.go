@@ -6,7 +6,6 @@ import (
   "bytes"
   "path/filepath"
   "github.com/mildred/doc/repo"
-  base58 "github.com/jbenet/go-base58"
 )
 
 type Preparator struct {
@@ -245,17 +244,21 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 
   if repo.ConflictFile(src) == "" {
     p.TotalBytes += uint64(srci.Size())
-    dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    if ! p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false, srcsymlink)) {
-      return false
+    dstname := repo.FindConflictFileName(dst, srch)
+    if dstname != "" {
+      if ! p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false, srcsymlink)) {
+        return false
+      }
     }
   }
 
   if p.Bidir && repo.ConflictFile(dst) == "" {
     p.TotalBytes += uint64(dsti.Size())
-    srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink)) {
-      return false
+    srcname := repo.FindConflictFileName(src, dsth)
+    if srcname != "" {
+      if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false, dstsymlink)) {
+        return false
+      }
     }
   }
 

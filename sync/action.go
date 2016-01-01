@@ -61,28 +61,26 @@ func (act *CopyAction) Run() error {
     }
   }
   if ! act.NoXattr {
-    hash, err := attrs.Get(act.Src, repo.XattrHash)
-    if err != nil {
-      return err
-    }
-    hashTime, err := attrs.Get(act.Src, repo.XattrHashTime)
-    if err != nil {
-      return err
-    }
-    err = attrs.Set(act.Dst, repo.XattrHash, hash)
-    if err != nil {
-      return err
-    }
-    err = attrs.Set(act.Dst, repo.XattrHashTime, hashTime)
-    if err != nil {
-      return err
-    }
     if act.Conflict {
       err = repo.MarkConflictFor(act.Dst, filepath.Base(act.OriginalDst))
       if err != nil {
         return err
       }
       err = repo.AddConflictAlternative(act.OriginalDst, filepath.Base(act.Dst))
+      if err != nil {
+        return err
+      }
+    }
+    hash, err := attrs.Get(act.Src, repo.XattrHash)
+    if err == nil {
+      err = attrs.Set(act.Dst, repo.XattrHash, hash)
+      if err != nil {
+        return err
+      }
+    }
+    hashTime, err := attrs.Get(act.Src, repo.XattrHashTime)
+    if err == nil {
+      err = attrs.Set(act.Dst, repo.XattrHashTime, hashTime)
       if err != nil {
         return err
       }

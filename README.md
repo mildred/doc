@@ -149,3 +149,6 @@ Bugs
   identically.
 
   The sequential mode should still be kept there.
+
+- cp, sync: avoid recreating conflicts over and over for the execution of the
+  same command multiple times
