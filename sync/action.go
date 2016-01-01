@@ -53,7 +53,7 @@ func (act *CopyAction) Run() error {
       return fmt.Errorf("link %s: %s", act.Dst, err.Error())
     }
   } else {
-    cmd := exec.Command("cp", "-a", "--reflink=auto", act.Src, act.Dst)
+    cmd := exec.Command("cp", "-a", "--reflink=auto", "-d", act.Src, act.Dst)
     cmd.Stderr = os.Stderr
     err = cmd.Run()
     if err != nil {
