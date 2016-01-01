@@ -35,6 +35,9 @@ func (e *Executor) Execute(actions <-chan *CopyAction) (conflicts []string, dupl
         act.Link = true
       }
     }
+    if e.LogAction != nil && numFiles == 1 {
+      e.LogAction(act, execBytes, 0)
+    }
     if ! e.DryRun {
       err := act.Run()
       execBytes += uint64(act.Size)
@@ -47,7 +50,7 @@ func (e *Executor) Execute(actions <-chan *CopyAction) (conflicts []string, dupl
       }
     }
     if e.LogAction != nil {
-      e.LogAction(act, execBytes, uint64(numFiles-1))
+      e.LogAction(act, execBytes, uint64(numFiles))
     }
   }
   return
