@@ -4,8 +4,6 @@ import (
   "flag"
   "fmt"
   "os"
-  "time"
-  "bytes"
   "path/filepath"
 
   repo "github.com/mildred/doc/repo"
@@ -85,29 +83,11 @@ func commitFile(path string, info os.FileInfo, force bool) ([]byte, error) {
     return nil, err
   }
 
-  timeData := []byte(info.ModTime().Format(time.RFC3339Nano))
-
-  hash, err := attrs.Get(path, repo.XattrHash)
-  if err != nil || !bytes.Equal(hash, digest) {
-    forced, err = attrs.SetForce(path, repo.XattrHash, digest, info, force)
-    if forced {
-      fmt.Fprintf(os.Stderr, "%s: force write xattrs\n", path)
-    }
-  } else {
-    digest = nil
-  }
-
-  hashTimeStr, err := attrs.Get(path, repo.XattrHashTime)
-  var hashTime time.Time
-  if err == nil {
-    hashTime, err = time.Parse(time.RFC3339Nano, string(hashTimeStr))
-  }
-  if err != nil || hashTime != info.ModTime() {
-    forced, err = attrs.SetForce(path, repo.XattrHashTime, timeData, info, force)
-    if forced {
-      fmt.Fprintf(os.Stderr, "%s: force write xattrs\n", path)
-    }
+  forced, err = repo.CommitFileHash(path, info, digest, force)
+  if forced {
+    fmt.Fprintf(os.Stderr, "%s: force write xattrs\n", path)
   }
 
   return digest, err
 }
+

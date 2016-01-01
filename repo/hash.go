@@ -4,6 +4,7 @@ import (
   "os"
   "io"
   "time"
+  "bytes"
   "syscall"
   "crypto/sha1"
 
@@ -49,6 +50,9 @@ func HashFile(path string) (mh.Multihash, error) {
   return digest, nil
 }
 
+// Return the hash for path stored in the xattrs. If the hash is out of date,
+// the hash is computed anew, unless `compute` is false in which case nil is
+// returned.
 func GetHash(path string, info os.FileInfo, compute bool) (mh.Multihash, error) {
   hashTimeStr, err := attrs.Get(path, XattrHashTime)
   if err != nil {
@@ -71,4 +75,26 @@ func GetHash(path string, info os.FileInfo, compute bool) (mh.Multihash, error) 
   return attrs.Get(path, XattrHash)
 }
 
+// Commit file to given hash, force writing xattrs if force is true.
+func CommitFileHash(path string, info os.FileInfo, digest []byte, force bool) (forced bool, err error) {
+  timeData := []byte(info.ModTime().Format(time.RFC3339Nano))
+
+  hash, err := attrs.Get(path, XattrHash)
+  if err != nil || !bytes.Equal(hash, digest) {
+    forced, err = attrs.SetForce(path, XattrHash, digest, info, force)
+  } else {
+    digest = nil
+  }
+
+  hashTimeStr, err := attrs.Get(path, XattrHashTime)
+  var hashTime time.Time
+  if err == nil {
+    hashTime, err = time.Parse(time.RFC3339Nano, string(hashTimeStr))
+  }
+  if err != nil || hashTime != info.ModTime() {
+    forced, err = attrs.SetForce(path, XattrHashTime, timeData, info, force)
+  }
+
+  return
+}
 
