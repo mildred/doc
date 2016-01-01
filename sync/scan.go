@@ -25,11 +25,13 @@ type Preparator struct {
   // only).
   Dedup map[string][]string
 
-  // [MANDATORY] Called when an action is to be taken
-  HandleAction func(act CopyAction)
+  // [MANDATORY] Called when an action is to be taken. Should return true. False
+  // is used to stop scanning
+  HandleAction func(act CopyAction) bool
 
-  // [MANDATORY] Called when an error happens.
-  HandleError func (e error)
+  // [MANDATORY] Called when an error happens. Should return true to continue
+  // scanning or false to stop scaning.
+  HandleError func (e error) bool
 
   // Logger to be called for each scanned item
   // Always called with hashing to false. When performing hashing, it is called
@@ -57,7 +59,7 @@ func Log(p *Preparator, src, dst string, hash_src, hash_dst bool) {
   }
 }
 
-func (p *Preparator) PrepareCopy(src, dst string) {
+func (p *Preparator) PrepareCopy(src, dst string) bool {
   var err error
 
   if p.Logger != nil {
@@ -74,15 +76,18 @@ func (p *Preparator) PrepareCopy(src, dst string) {
 
   if os.IsNotExist(dsterr) && srcerr == nil {
 
-    srchash, err := repo.GetHash(src, srci, p.Dedup != nil)
-    if err != nil {
-      p.HandleError(err)
-      return
+    var srchash []byte
+
+    if ! srci.IsDir() {
+      srchash, err = repo.GetHash(src, srci, p.Dedup != nil)
+      if err != nil {
+        return p.HandleError(err)
+      }
     }
 
-    p.HandleAction(*NewCopyAction(src, dst, srchash, srci.Size(), "", false, false))
+    res := p.HandleAction(*NewCopyAction(src, dst, srchash, srci.Size(), "", false, false))
     p.TotalBytes += uint64(srci.Size())
-    return
+    return res
 
   }
 
@@ -94,22 +99,26 @@ func (p *Preparator) PrepareCopy(src, dst string) {
 
     // Synchronize in the other direction
     if p.Bidir {
-      dsthash, err := repo.GetHash(dst, dsti, p.Dedup != nil)
-      if err != nil {
-        p.HandleError(err)
-        return
+      var dsthash []byte
+      if ! dsti.IsDir() {
+        dsthash, err = repo.GetHash(dst, dsti, p.Dedup != nil)
+        if err != nil {
+          return p.HandleError(err)
+        }
       }
 
-      p.HandleAction(*NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false))
+      res := p.HandleAction(*NewCopyAction(dst, src, dsthash, dsti.Size(), "", false, false))
       p.TotalBytes += uint64(dsti.Size())
-      return
+      return res
     }
 
     // Record dst hash in case we move it
     if p.Dedup != nil {
       hash, err := repo.GetHash(dst, dsti, p.CheckHash)
       if err != nil {
-        p.HandleError(err)
+        if ! p.HandleError(err) {
+          return false
+        }
       } else {
         p.Dedup[string(hash)] = append(p.Dedup[string(hash)], dst)
       }
@@ -121,13 +130,11 @@ func (p *Preparator) PrepareCopy(src, dst string) {
   //
 
   if srcerr != nil {
-    p.HandleError(srcerr)
-    return
+    return p.HandleError(srcerr)
   }
 
   if dsterr != nil {
-    p.HandleError(dsterr)
-    return
+    return p.HandleError(dsterr)
   }
 
   //
@@ -144,47 +151,47 @@ func (p *Preparator) PrepareCopy(src, dst string) {
 
     f, err := os.Open(src)
     if err != nil {
-      p.HandleError(err)
-      return
+      return p.HandleError(err)
     }
     defer f.Close()
     names, err := f.Readdirnames(-1)
     if err != nil {
-      p.HandleError(err)
-      return
+      return p.HandleError(err)
     }
 
     for _, name := range names {
       if p.Bidir {
         srcnames[name] = true
       }
-      p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name))
+      if ! p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+        return false
+      }
     }
 
     if p.Bidir {
 
       f, err := os.Open(dst)
       if err != nil {
-        p.HandleError(err)
-        return
+        return p.HandleError(err)
       }
       defer f.Close()
       dstnames, err := f.Readdirnames(-1)
       if err != nil {
-        p.HandleError(err)
-        return
+        return p.HandleError(err)
       }
 
       for _, name := range dstnames {
         if srcnames[name] {
           continue
         }
-        p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name))
+        if ! p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+          return false
+        }
       }
 
     }
 
-    return
+    return true
 
   }
 
@@ -209,8 +216,7 @@ func (p *Preparator) PrepareCopy(src, dst string) {
       _, err = repo.CommitFileHash(src, srci, srch, false)
     }
     if err != nil {
-      p.HandleError(err)
-      return
+      return p.HandleError(err)
     }
   }
   if ! dsti.IsDir() {
@@ -227,25 +233,28 @@ func (p *Preparator) PrepareCopy(src, dst string) {
       _, err = repo.CommitFileHash(dst, dsti, dsth, false)
     }
     if err != nil {
-      p.HandleError(err)
-      return
+      return p.HandleError(err)
     }
   }
   if bytes.Equal(srch, dsth) {
-    return
+    return true
   }
 
   if repo.ConflictFile(src) == "" {
     p.TotalBytes += uint64(srci.Size())
     dstname := repo.FindConflictFileName(dst, base58.Encode(srch))
-    p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false))
+    if ! p.HandleAction(*NewCopyAction(src, dstname, nil, srci.Size(), dst, true, false)) {
+      return false
+    }
   }
 
   if p.Bidir && repo.ConflictFile(dst) == "" {
     p.TotalBytes += uint64(dsti.Size())
     srcname := repo.FindConflictFileName(src, base58.Encode(dsth))
-    p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false))
+    if ! p.HandleAction(*NewCopyAction(dst, srcname, nil, dsti.Size(), src, true, false)) {
+      return false
+    }
   }
 
-  return
+  return true
 }

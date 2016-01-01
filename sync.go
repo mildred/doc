@@ -79,6 +79,7 @@ func mainCopy(args []string) {
   opt_from    := f.String("from", "", "Specify the source directory")
   opt_to      := f.String("to", "", "Specify the destination directory")
   opt_commit  := f.Bool("commit", false, "Commit the new hash if it has been computed")
+  opt_2pass   := f.Bool("2", false, "Scan before copy in two distinct pass")
   f.Usage = func(){
     fmt.Print(copyUsage)
     f.PrintDefaults()
@@ -86,7 +87,20 @@ func mainCopy(args []string) {
   f.Parse(args)
 
   src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, *opt_commit, *opt_dedup || *opt_dd, *opt_dd, *opt_hash, false)
+  sync_opts := sync.SyncOptions{
+    DryRun:    *opt_dry_run,
+    Force:     *opt_force,
+    Quiet:     *opt_quiet,
+    Commit:    *opt_commit,
+    Dedup:     *opt_dedup || *opt_dd,
+    DeleteDup: *opt_dd,
+    CheckHash: *opt_hash,
+    Bidir:     false,
+    TwoPass:   *opt_2pass,
+  }
+  if sync.Sync(src, dst, sync_opts) > 0 {
+    os.Exit(1)
+  }
 }
 
 func mainSync(args []string) {
@@ -97,6 +111,7 @@ func mainSync(args []string) {
   opt_from    := f.String("from", "", "Specify the source directory")
   opt_to      := f.String("to", "", "Specify the destination directory")
   opt_commit  := f.Bool("commit", false, "Commit the new hash if it has been computed")
+  opt_2pass   := f.Bool("2", false, "Scan before copy in two distinct pass")
   f.Usage = func(){
     fmt.Print(syncUsage)
     f.PrintDefaults()
@@ -104,7 +119,20 @@ func mainSync(args []string) {
   f.Parse(args)
 
   src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  syncOrCopy(src, dst, *opt_dry_run, *opt_force, *opt_quiet, *opt_commit, false, false, false, true)
+  sync_opts := sync.SyncOptions{
+    DryRun:    *opt_dry_run,
+    Force:     *opt_force,
+    Quiet:     *opt_quiet,
+    Commit:    *opt_commit,
+    Dedup:     false,
+    DeleteDup: false,
+    CheckHash: false,
+    Bidir:     true,
+    TwoPass:   *opt_2pass,
+  }
+  if sync.Sync(src, dst, sync_opts) > 0 {
+    os.Exit(1)
+  }
 }
 
 func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst string) {
@@ -144,125 +172,4 @@ func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst str
   return
 }
 
-func syncOrCopy(src, dst string, dry_run, force, quiet, commit, dedup, delete_dup, check_hash, bidir bool){
-  var dedup_map map[string][]string = nil
-  if dedup {
-    dedup_map = map[string][]string{}
-  }
-
-  if ! quiet {
-    fmt.Printf("Source:      %s\n", src)
-    fmt.Printf("Destination: %s\n", dst)
-    fmt.Printf("Step 1: Prepare copy...\n")
-  }
-
-  prep := &sync.Preparator{
-    CheckHash: check_hash,
-    Bidir: bidir,
-    Commit: commit,
-    Dedup: dedup_map,
-  }
-
-  if ! quiet {
-    prep.Logger = sync.Log
-  }
-
-  var errors []error
-  prep.HandleError = func(e error) {
-    errors = append(errors, e)
-  }
-
-  var actions []sync.CopyAction
-  prep.HandleAction = func(act sync.CopyAction) {
-    actions = append(actions, act)
-  }
-
-  prep.PrepareCopy(src, dst)
-
-  if ! quiet {
-    fmt.Printf("\x1b[2K")
-  }
-
-  for _, e := range errors {
-    fmt.Fprintf(os.Stderr, "%s\n", e.Error())
-  }
-
-  var conflicts []string
-  var nerrors int
-  var dup_hashes [][]byte
-
-  if ! quiet {
-    fmt.Printf("Step 2: Copy files...\n")
-  }
-
-  if len(errors) == 0 || force || dry_run {
-    if ! quiet && len(errors) > 0 {
-      fmt.Printf("Errors found but continuing operation\n");
-    }
-    conflicts, nerrors, dup_hashes = performActions(actions, prep.TotalBytes, dry_run, force, quiet, dedup_map)
-    nerrors = nerrors + len(errors)
-  }
-
-  if delete_dup {
-    for _, h := range dup_hashes {
-      for _, path := range dedup_map[string(h)] {
-        if dry_run {
-          fmt.Sprintf("rm -f %s\n", path)
-        } else {
-          err := os.Remove(path)
-          if err != nil {
-            fmt.Fprintf(os.Stderr, "remove %s: %s", path, err.Error())
-            nerrors += 1
-          }
-        }
-      }
-    }
-  }
-
-  for _, c := range conflicts {
-    fmt.Fprintf(os.Stderr, "CONFLICT %s\n", c)
-  }
-
-  if nerrors > 0 {
-   os.Exit(1)
-  }
-}
-
-func performActions(actions []sync.CopyAction, totalBytes uint64, dry_run, force, quiet bool, dedup map[string][]string) (conflicts []string, nerrors int, duplicate_hashes [][]byte) {
-  var execBytes uint64 = 0
-  bytescount := fmt.Sprintf("%d", len(fmt.Sprintf("%d", totalBytes)))
-
-  for _, act := range actions {
-    if act.Conflict {
-      conflicts = append(conflicts, act.Dst)
-    }
-    if dedup != nil && act.Dsthash != nil {
-      if files, ok := dedup[string(act.Dsthash)]; ok && len(files) > 0 {
-        duplicate_hashes = append(duplicate_hashes, act.Dsthash)
-        act.Src = files[0]
-        act.Link = true
-      }
-    }
-    if dry_run {
-      fmt.Println(act.Show())
-    } else {
-      err := act.Run()
-      execBytes += uint64(act.Size)
-      if err != nil {
-        fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-        nerrors = nerrors + 1
-        if ! force {
-          break
-        }
-      } else if ! quiet {
-        fmt.Printf("\r\x1b[2K%" + bytescount + "d / %d (%2.0f%%) %s\r", execBytes, totalBytes, 100.0 * float64(execBytes) / float64(totalBytes), act.Dst)
-      }
-    }
-  }
-  if ! quiet {
-    fmt.Println()
-  }
-
-  return
-}
 
