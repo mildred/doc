@@ -45,6 +45,7 @@ func (l *Logger) LogExec(act *CopyAction, bytes uint64, items uint64) {
 	l.exec.dst = act.Dst
 	l.exec.bytes = bytes
 	l.exec.item = items
+	l.Print()
 }
 
 func (l *Logger) LogError(e error) {
