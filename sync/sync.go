@@ -71,6 +71,7 @@ func Sync(src, dst string, opt SyncOptions) (numErrors int) {
       return true
     },
     HandleAction: func(act CopyAction) bool {
+      logger.AddFile(&act)
       if opt.TwoPass {
         actions_slice = append(actions_slice, &act)
         return true

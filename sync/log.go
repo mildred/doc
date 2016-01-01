@@ -13,6 +13,7 @@ type Logger struct {
 		dst string
 		dst_hash bool
 		num_files uint64
+		total_files uint64
 		total_bytes uint64
 	}
 	copying bool
@@ -39,6 +40,11 @@ func (l *Logger) LogPrepare(p *Preparator, src, dst string, hash_src, hash_dst b
 	l.Print()
 }
 
+func (l *Logger) AddFile(act *CopyAction) {
+	l.scan.total_files++
+	l.Print()
+}
+
 func (l *Logger) LogExec(act *CopyAction, bytes uint64, items uint64) {
 	l.copying = true
 	l.exec.src = act.Src
@@ -50,7 +56,7 @@ func (l *Logger) LogExec(act *CopyAction, bytes uint64, items uint64) {
 
 func (l *Logger) LogError(e error) {
 	l.num_errors++
-	fmt.Println(e)
+	fmt.Printf("\x1b[K%s\n", e.Error());
 	l.Print()
 }
 
@@ -64,8 +70,8 @@ func (l *Logger) Print() {
 	}
 	fmt.Printf("\x1b[K\n");
 	fmt.Printf(
-		"\x1b[KScanning: %d files (%d bytes) %s\n",
-		l.scan.num_files, l.scan.total_bytes, filepath.Base(l.scan.src))
+		"\x1b[KScanning: %d files (%d bytes, %d files to copy) %s\n",
+		l.scan.num_files, l.scan.total_bytes, l.scan.total_files, filepath.Base(l.scan.src))
 	if l.scan.src_hash {
 		fmt.Printf("\x1b[K  From: %s (hashing)\n", filepath.Dir(l.scan.src))
 	} else {
@@ -78,7 +84,7 @@ func (l *Logger) Print() {
 	}
 
 	if l.copying {
-		percentItems := 100.0 * float64(l.exec.item) / float64(l.scan.num_files)
+		percentItems := 100.0 * float64(l.exec.item) / float64(l.scan.total_files)
 		percentBytes := 100.0 * float64(l.exec.bytes) / float64(l.scan.total_bytes)
 		fmt.Printf(
 			"\x1b[KCopying: %d bytes %2.0f%% (file %d %2.0f%%) %s\n"+
@@ -87,9 +93,9 @@ func (l *Logger) Print() {
 			l.exec.bytes, percentBytes, l.exec.item, percentItems, filepath.Base(l.exec.dst),
 			filepath.Dir(l.exec.src),
 		  filepath.Dir(l.exec.dst))
-		fmt.Printf("\x1b[7A")
+		fmt.Printf("\x1b[K\x1b[7A")
 	} else {
-		fmt.Printf("\x1b[4A")
+		fmt.Printf("\x1b[K\x1b[4A")
 	}
 }
 
