@@ -65,9 +65,11 @@ func mainCommit(args []string) {
       return err
     }
 
-    // Skip .dirstore/ at root
+    // Skip .dirstore/ at root and .doccommit
     if filepath.Base(path) == attrs.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
       return filepath.SkipDir
+    } else if doccommit != nil && filepath.Join(dir, ".doccommit") == path {
+      return nil
     } else if info.IsDir() || ! info.Mode().IsRegular() {
       return nil
     }

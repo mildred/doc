@@ -31,17 +31,26 @@ func Create(path string) (*CommitFileWriter, error) {
       return nil, fmt.Errorf("%s: manually modified (%s)", path, err.Error())
     }
 
-    hash2, err := repo.GetHash(path, info, false)
-    if err != nil {
-      return nil, fmt.Errorf("%s: cannot find hash (%s)", err.Error())
-    }
+    if len(hash) > 0 {
+      hash2, err := repo.GetHash(path, info, false)
+      if err != nil {
+        return nil, fmt.Errorf("%s: cannot find hash (%s)", err.Error())
+      }
 
-    if ! bytes.Equal(hash, hash2) {
-      return nil, fmt.Errorf("%s: file already exists and was manually modified (hash %s != %s)", path, base58.Encode(hash), base58.Encode(hash2))
+      if ! bytes.Equal(hash, hash2) {
+        return nil, fmt.Errorf("%s: file already exists and was manually modified (hash %s != %s)", path, base58.Encode(hash), base58.Encode(hash2))
+      }
     }
   }
   f, err := os.Create(path)
   if err != nil {
+    return nil, err
+  }
+
+  err = attrs.Set(path, XattrCommit, []byte{})
+  if err != nil {
+    f.Close()
+    os.Remove(path)
     return nil, err
   }
 
