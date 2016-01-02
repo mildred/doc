@@ -77,6 +77,10 @@ Future Usage
   committed file, its timestamp and hash. More quickly parsed than the
   filesystem inodes, it can be used to compare two dirstores for missing files
 
+  alternatively, doc commit shall create an index file named `.dircommit` in the
+  committed directory containing the same content as `doc status -c` with the
+  modification time
+
 ### `doc missing -from SRC [DEST]`, `doc missing -to DEST [SRC]`, `doc missing [SRC] DEST`
 
 Show missing files in SRC that are in DEST
