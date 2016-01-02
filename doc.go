@@ -52,9 +52,32 @@ of its content along with the mtime of the file when the hashing was performed.
 It allows you to track file modifications and identity. It can also save PAR2
 redundency information about each file (in case they become corrupt).
 
-List of available commands:
+Query commands:
+
+        check
+        show
+        status
+
+Repository commands:
+
+        init
+        commit
+        save
+
+Synchronisation commands:
+
+        cp
+        sync
+
+Other commands:
 
 `
+
+var described_commands []string = []string{
+  "check", "show", "status",
+  "init", "commit", "save",
+  "cp", "sync",
+}
 
 const helpText2 string = `
 You can get help on a command using the -h command line flag or by using the
@@ -74,7 +97,16 @@ func mainHelp(args []string) {
     }
     sort.Strings(cmds)
     for _, cmd := range cmds {
-      fmt.Printf("\t%s\n", cmd)
+      already_described := false
+      for _, e := range described_commands {
+        if e == cmd {
+          already_described = true
+          break
+        }
+      }
+      if ! already_described {
+        fmt.Printf("\t%s\n", cmd)
+      }
     }
     fmt.Printf(helpText2)
     flag.PrintDefaults()
