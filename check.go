@@ -29,7 +29,7 @@ Symbols show the file status:
 Options:
 `
 
-func mainCheck(args []string) {
+func mainCheck(args []string) int {
   f := flag.NewFlagSet("status", flag.ExitOnError)
   opt_all := f.Bool("a", false, "Check all files, including modified")
   f.Usage = func(){
@@ -93,7 +93,8 @@ func mainCheck(args []string) {
 
   if err != nil {
     fmt.Fprintf(os.Stderr, "%v", err)
-    os.Exit(1)
+    return 1
   }
+  return 0
 }
 

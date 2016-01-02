@@ -25,7 +25,7 @@ modified, this will be detected and it will not be overwritten.
 Options:
 `
 
-func mainCommit(args []string) {
+func mainCommit(args []string) int {
   f := flag.NewFlagSet("commit", flag.ExitOnError)
   opt_force := f.Bool("f", false, "Force writing xattrs on read only files")
   opt_nodoccommit := f.Bool("n", false, "Don't write .doccommit")
@@ -130,7 +130,7 @@ func mainCommit(args []string) {
     }
   }
 
-  os.Exit(status)
+  return status
 }
 
 func commitFile(path string, info os.FileInfo, force bool) ([]byte, error) {

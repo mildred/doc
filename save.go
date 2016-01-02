@@ -21,7 +21,7 @@ separately in the .dirstore directory.
 Options:
 `
 
-func mainSave(args []string) {
+func mainSave(args []string) int {
   f := flag.NewFlagSet("save", flag.ExitOnError)
   opt_force := f.Bool("force", false, "Force writing xattrs on read only files")
   f.Usage = func(){
@@ -94,6 +94,6 @@ func mainSave(args []string) {
     os.Exit(1)
   }
 
-  os.Exit(status)
+  return status
 }
 

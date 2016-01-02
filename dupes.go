@@ -32,7 +32,7 @@ type sameFile struct {
   devices []uint64
 }
 
-func mainDupes(args []string) {
+func mainDupes(args []string) int {
   f := flag.NewFlagSet("dupes", flag.ExitOnError)
   opt_show_links := f.Bool("l", false, "Show group of files that share the same inode")
   opt_progress := f.Bool("p", false, "Show progress")
@@ -122,8 +122,9 @@ func mainDupes(args []string) {
   }
 
   if errors > 0 {
-    os.Exit(1)
+    return 1
   }
+  return 0
 }
 
 func deduplicate(f sameFile) error {

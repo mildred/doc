@@ -29,7 +29,7 @@ will probably fail to set the extended attributes
 Options:
 `
 
-func mainStatus(args []string) {
+func mainStatus(args []string) int {
   f := flag.NewFlagSet("status", flag.ExitOnError)
   opt_no_par2 := f.Bool("n", false, "Do not show files missing PAR2 redundency data")
   opt_show_only_hash := f.Bool("c", false, "Show only unchanged committed files with their hash")
@@ -120,6 +120,6 @@ func mainStatus(args []string) {
     fmt.Fprintf(os.Stderr, "%v", err)
     os.Exit(1)
   }
-  os.Exit(status)
+  return status
 }
 

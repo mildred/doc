@@ -68,7 +68,7 @@ hash will be computed and that can introduce a delay.
 Options:
 `
 
-func mainCopy(args []string) {
+func mainCopy(args []string) int {
   f := flag.NewFlagSet("cp", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
   opt_quiet   := f.Bool("q", false, "Quiet")
@@ -101,9 +101,10 @@ func mainCopy(args []string) {
   if sync.Sync(src, dst, sync_opts) > 0 {
     os.Exit(1)
   }
+  return 0
 }
 
-func mainSync(args []string) {
+func mainSync(args []string) int {
   f := flag.NewFlagSet("sync", flag.ExitOnError)
   opt_dry_run := f.Bool("n", false, "Dry run")
   opt_quiet   := f.Bool("q", false, "Quiet")
@@ -133,42 +134,7 @@ func mainSync(args []string) {
   if sync.Sync(src, dst, sync_opts) > 0 {
     os.Exit(1)
   }
+  return 0
 }
 
-func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst string) {
-  var arg0, arg1 string
-  if len(args) > 0 {
-    arg0 = args[0]
-  }
-  if len(args) > 1 {
-    arg1 = args[1]
-  }
-  src = opt_src
-  dst = opt_dst
-  if src == "" && dst == "" {
-    src = arg0
-    dst = arg1
-    if dst == "" {
-      dst = src
-      src = "."
-    }
-  } else if dst == "" {
-    dst = arg0
-    if dst == "" {
-      dst = "."
-    }
-  } else if src == "" {
-    src = arg0
-    if src == "" {
-      src = "."
-    }
-  }
-
-  if src == "" || dst == "" {
-    fmt.Fprintln(os.Stderr, "You must specify at least the destination directory")
-    os.Exit(1)
-  }
-
-  return
-}
 

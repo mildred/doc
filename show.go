@@ -24,7 +24,7 @@ detailed version of doc status.
 Options:
 `
 
-func mainShow(args []string) {
+func mainShow(args []string) int {
   f := flag.NewFlagSet("show", flag.ExitOnError)
   opt_check := f.Bool("c", false, "Run integrity check")
   f.Usage = func(){
@@ -132,7 +132,7 @@ func mainShow(args []string) {
     fmt.Fprintf(os.Stderr, "%v", err)
     os.Exit(1)
   }
-  os.Exit(status)
+  return status
 }
 
 func boolToAvailableStr(b bool) string {

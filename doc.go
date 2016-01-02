@@ -10,10 +10,10 @@ import (
   attrs "github.com/mildred/doc/attrs"
 )
 
-var commands map[string]func([]string)
+var commands map[string]func([]string)int
 
 func init(){
-  commands = map[string]func([]string){
+  commands = map[string]func([]string)int{
     "help": mainHelp,
     "init": mainInit,
     "status": mainStatus,
@@ -24,6 +24,7 @@ func init(){
     "sync": mainSync,
     "save": mainSave,
     "dupes": mainDupes,
+    "missing": mainMissing,
   }
 }
 
@@ -40,7 +41,10 @@ func main() {
     mainHelp(nil)
     os.Exit(1)
   } else {
-    f(flag.Args()[1:])
+    status := f(flag.Args()[1:])
+    if status != 0 {
+      os.Exit(status)
+    }
   }
 }
 
@@ -57,6 +61,7 @@ Query commands:
         check
         show
         status
+        missing
 
 Repository commands:
 
@@ -74,7 +79,7 @@ Other commands:
 `
 
 var described_commands []string = []string{
-  "check", "show", "status",
+  "check", "show", "status", "missing",
   "init", "commit", "save",
   "cp", "sync",
 }
@@ -88,7 +93,7 @@ help command:
 
 `
 
-func mainHelp(args []string) {
+func mainHelp(args []string) int {
   if len(args) == 0 || args[0] == "help" {
     fmt.Printf(helpText)
     var cmds []string
@@ -114,8 +119,9 @@ func mainHelp(args []string) {
     cmd([]string{"-h"})
   } else {
     fmt.Fprintf(os.Stderr, "doc %s: command not found\n", args[0])
-    os.Exit(1)
+    return 1
   }
+  return 0
 }
 
 const initUsage string =
@@ -133,7 +139,7 @@ directory on a different device (as inode numbers are used to associate files to
 attributes).
 `
 
-func mainInit(args []string) {
+func mainInit(args []string) int {
   f := flag.NewFlagSet("init", flag.ExitOnError)
   f.Usage = func(){
     fmt.Print(initUsage)
@@ -147,5 +153,43 @@ func mainInit(args []string) {
 
   dirstore := path.Join(dir, attrs.DirStoreName)
   os.Mkdir(dirstore, 0777)
+  return 1
+}
+
+func findSourceDest(opt_src, opt_dst string, args []string) (src string, dst string) {
+  var arg0, arg1 string
+  if len(args) > 0 {
+    arg0 = args[0]
+  }
+  if len(args) > 1 {
+    arg1 = args[1]
+  }
+  src = opt_src
+  dst = opt_dst
+  if src == "" && dst == "" {
+    src = arg0
+    dst = arg1
+    if dst == "" {
+      dst = src
+      src = "."
+    }
+  } else if dst == "" {
+    dst = arg0
+    if dst == "" {
+      dst = "."
+    }
+  } else if src == "" {
+    src = arg0
+    if src == "" {
+      src = "."
+    }
+  }
+
+  if src == "" || dst == "" {
+    fmt.Fprintln(os.Stderr, "You must specify at least the destination directory")
+    os.Exit(1)
+  }
+
+  return
 }
 
