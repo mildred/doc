@@ -24,7 +24,28 @@ type CommitFileWriter struct {
   hasher hash.Hash
 }
 
-func Read(path string) (map[string][]string, error) {
+// hash is base58 encoded
+func ReadByPath(path string) (map[string]string, error) {
+  f, err := os.Open(path)
+  if err != nil {
+    return nil, err
+  }
+  defer f.Close()
+
+  res := map[string]string{}
+
+  scanner := bufio.NewScanner(f)
+  for scanner.Scan() {
+    line := scanner.Text()
+    elems := strings.SplitN(line, "\t", 2)
+    res[DecodePath(elems[1])] = elems[0]
+  }
+
+  return res, scanner.Err()
+}
+
+// hash is base58 encoded
+func ReadByHash(path string) (map[string][]string, error) {
   f, err := os.Open(path)
   if err != nil {
     return nil, err

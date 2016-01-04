@@ -13,7 +13,13 @@ const usageMissing string =
 doc missing [OPTIONS...] -from SRC [DEST]
 doc missing [OPTIONS...] -to DEST [SRC]
 
-Show missing files in SRC that are in DEST
+Show files in SRC that are different from the same files in DEST. Lines start
+with a symbol, followed by the file hash and the file name.
+
+  -     Represents the file in SRC
+  +     Represents the file in DEST
+
+Conflicts are represented by two lines (one for each version).
 
 Options:
 `
@@ -32,28 +38,22 @@ func mainMissing(args []string) int {
   srccommit := filepath.Join(src, ".doccommit")
   dstcommit := filepath.Join(dst, ".doccommit")
 
-  srcfiles, err := commit.Read(srccommit)
+  srcfiles, err := commit.ReadByPath(srccommit)
   if err != nil {
     fmt.Fprintf(os.Stderr, "%s: %s", srccommit, err.Error())
   }
 
-  dstfiles, err := commit.Read(dstcommit)
+  dstfiles, err := commit.ReadByPath(dstcommit)
   if err != nil {
     fmt.Fprintf(os.Stderr, "%s: %s", dstcommit, err.Error())
   }
 
-  for hash, dfiles := range dstfiles {
-    sfiles := srcfiles[hash]
-    for _, sfile := range sfiles {
-      same_file := false
-      for _, dfile := range dfiles {
-        if dfile == sfile {
-          same_file = true
-          break
-        }
-        if ! same_file {
-          fmt.Printf("%s\t%s\n", hash, commit.EncodePath(dfile))
-        }
+  for file, shash := range srcfiles {
+    dhash := dstfiles[file]
+    if shash != dhash {
+      fmt.Printf("- %s\t%s\n", shash, commit.EncodePath(file))
+      if dhash != "" {
+        fmt.Printf("+ %s\t%s\n", shash, commit.EncodePath(file))
       }
     }
   }
