@@ -23,7 +23,7 @@ func mainMissing(args []string) int {
   opt_from    := f.String("from", "", "Specify the source directory")
   opt_to      := f.String("to", "", "Specify the destination directory")
   f.Usage = func(){
-    fmt.Print(usageStatus)
+    fmt.Print(usageMissing)
     f.PrintDefaults()
   }
   f.Parse(args)
