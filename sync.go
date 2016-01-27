@@ -35,6 +35,9 @@ the actual copy. Interrupting the process during its first step leave your
 filesystem untouched. During this parsing step, if files are out of date, their
 hash will be computed and that can introduce a delay.
 
+WARNING: The preparation step can take a lot of time if a directory has
+uncommitted files.
+
 Options:
 `
 
@@ -63,6 +66,9 @@ the actual copy. Interrupting the process during its first step leave your
 filesystem untouched. During this parsing step, if files are out of date, their
 hash will be computed and that can introduce a delay.
 
+WARNING: The preparation step can take a lot of time if the source directory has
+uncommitted files.
+
 Options:
 `
 
@@ -71,9 +77,9 @@ func mainCopy(args []string) int {
 	opt_dry_run := f.Bool("n", false, "Dry run")
 	opt_quiet := f.Bool("q", false, "Quiet")
 	opt_force := f.Bool("f", false, "Force copy even if there are errors")
-	opt_hash := f.Bool("c", false, "If necessary, check real hash when deduplicating")
 	opt_dedup := f.Bool("d", false, "Deduplicate files on destination (link files on destination instead of copying them from source if possible)")
 	opt_dd := f.Bool("dd", false, "Like -d but also remove duplicate files")
+	opt_hash := f.Bool("dc", false, "check hash for files that has been modified on the destination directory when deduplicating")
 	opt_from := f.String("from", "", "Specify the source directory")
 	opt_to := f.String("to", "", "Specify the destination directory")
 	opt_commit := f.Bool("commit", false, "Commit the new hash if it has been computed")
