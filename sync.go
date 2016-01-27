@@ -82,7 +82,7 @@ func mainCopy(args []string) int {
 	opt_hash := f.Bool("dc", false, "check hash for files that has been modified on the destination directory when deduplicating")
 	opt_from := f.String("from", "", "Specify the source directory")
 	opt_to := f.String("to", "", "Specify the destination directory")
-	opt_commit := f.Bool("commit", false, "Commit the new hash if it has been computed")
+	opt_commit := f.Bool("commit", false, "Commit the new hash if it has been computed (appear in both source and destination)")
 	opt_2pass := f.Bool("2", false, "Scan before copy in two distinct pass")
 	f.Usage = func() {
 		fmt.Print(copyUsage)

@@ -22,6 +22,7 @@ func IsErrno(err, errno error) bool {
 	}
 }
 
+// Return an emty string if the dir store does not exists
 func FindDirStore(path string) string {
 	res := filepath.Join(path, DirStoreName)
 	_, err := os.Lstat(path)
@@ -30,7 +31,7 @@ func FindDirStore(path string) string {
 	}
 
 	_, err = os.Lstat(res)
-	if err != nil && err != os.ErrNotExist {
+	if err != nil {
 		return FindDirStore(filepath.Join(path, ".."))
 	}
 
