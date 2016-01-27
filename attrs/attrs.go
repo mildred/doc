@@ -1,17 +1,17 @@
 package attrs
 
 import (
+	"fmt"
+	xattr "github.com/ivaxer/go-xattr"
 	"io/ioutil"
 	"os"
-	"fmt"
-	"syscall"
 	"path/filepath"
-  xattr "github.com/ivaxer/go-xattr"
+	"syscall"
 )
 
 const DirStoreName string = ".dirstore"
 
-const XATTR_CREATE  = 1
+const XATTR_CREATE = 1
 const XATTR_REPLACE = 2
 
 func IsErrno(err, errno error) bool {
@@ -30,7 +30,7 @@ func FindDirStore(path string) string {
 	}
 
 	_, err = os.Lstat(res)
-	if err != nil {
+	if err != nil && err != os.ErrNotExist {
 		return FindDirStore(filepath.Join(path, ".."))
 	}
 
@@ -69,7 +69,7 @@ func setAttr(path, name string, value []byte, flag int) error {
 		return fmt.Errorf("%s: Could not find %s", path, DirStoreName)
 	}
 
-	f, err := os.OpenFile(attrname, flag | os.O_CREATE | os.O_TRUNC | os.O_WRONLY, mode)
+	f, err := os.OpenFile(attrname, flag|os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func Set(path, name string, value []byte) error {
 func Create(path, name string, value []byte) error {
 	err := xattr.Setxattr(path, name, value, XATTR_CREATE)
 	if IsErrno(err, syscall.ENOTSUP) {
-		err = setAttr(path, name, value, os.O_CREATE | os.O_EXCL)
+		err = setAttr(path, name, value, os.O_CREATE|os.O_EXCL)
 	}
 	return err
 }
@@ -122,7 +122,7 @@ func SetForce(path, name string, value []byte, info os.FileInfo, force bool) (bo
 	if err != nil && force && os.IsPermission(err) {
 		m := info.Mode()
 		forced = true
-		e1 := os.Chmod(path, m | 0200)
+		e1 := os.Chmod(path, m|0200)
 		if e1 != nil {
 			err = e1
 		} else {
@@ -146,4 +146,3 @@ func Get(path, name string) ([]byte, error) {
 	}
 	return res, err
 }
-
