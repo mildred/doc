@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -20,6 +21,60 @@ func IsErrno(err, errno error) bool {
 	} else {
 		return err == errno
 	}
+}
+
+// Return a list of extended attribute names for a path
+func GetNameList(path string) ([]string, error) {
+	list, err := xattr.List(path)
+	if err == nil || !IsErrno(err, syscall.ENOTSUP) {
+		return list, err
+	} else {
+		attrdir, _, err := findAttrDir(path)
+		if err != nil {
+			return nil, err
+		} else if attrdir == "" {
+			return nil, fmt.Errorf("%s: Could not find %s", path, DirStoreName)
+		}
+
+		f, err := os.Open(attrdir)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+
+		names, err := f.Readdirnames(-1)
+		if err != nil {
+			return nil, err
+		}
+
+		var res []string
+
+		for _, name := range names {
+			if strings.HasSuffix(name, ".xattr") {
+				res = append(res, name[:len(name)-6])
+			}
+		}
+
+		return res, nil
+	}
+}
+
+// Return a lit of attribute names and a list of their values
+func GetList(path string) ([]string, [][]byte, error) {
+	var val []byte
+	list, err := GetNameList(path)
+	values := make([][]byte, len(list))
+	if err != nil {
+		return nil, nil, err
+	}
+	for i, key := range list {
+		val, err = xattr.Get(path, key)
+		if err != nil {
+			return nil, nil, err
+		}
+		values[i] = val
+	}
+	return list, values, nil
 }
 
 // Return an emty string if the dir store does not exists
@@ -38,20 +93,20 @@ func FindDirStore(path string) string {
 	return res
 }
 
-func findAttrFile(path, name string) (string, os.FileMode, error) {
+func findAttrDir(path string) (string, os.FileInfo, error) {
 	st, err := os.Lstat(path)
 	if err != nil {
-		return "", 0, err
+		return "", nil, err
 	}
 
 	storepath := FindDirStore(path)
 	if storepath == "" {
-		return "", st.Mode(), nil
+		return "", st, nil
 	}
 
 	storepath, err = filepath.Abs(storepath)
 	if err != nil {
-		return "", st.Mode(), err
+		return "", st, err
 	}
 
 	sys, ok := st.Sys().(*syscall.Stat_t)
@@ -59,7 +114,35 @@ func findAttrFile(path, name string) (string, os.FileMode, error) {
 		panic("Cannot read inode number")
 	}
 	inodenum := sys.Ino
-	return filepath.Join(storepath, fmt.Sprintf("inode.%d.%s.xattr", inodenum, name)), st.Mode(), nil
+
+	inodepath := filepath.Join(storepath, fmt.Sprintf("%d.inode", inodenum))
+
+	err = os.MkdirAll(inodepath, os.ModePerm)
+	if err != nil {
+		return "", st, err
+	}
+
+	return inodepath, st, err
+}
+
+func findAttrFile(path, name string) (string, os.FileMode, error) {
+	inodepath, st, err := findAttrDir(path)
+	storepath := filepath.Dir(inodepath)
+
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	if !ok {
+		panic("Cannot read inode number")
+	}
+	inodenum := sys.Ino
+
+	xattrpath := filepath.Join(inodepath, fmt.Sprintf("%s.xattr", name))
+	oldxattr := filepath.Join(storepath, fmt.Sprintf("inode.%d.%s.xattr", inodenum, name))
+
+	if _, e := os.Stat(oldxattr); e == nil || !os.IsNotExist(e) {
+		err = os.Rename(oldxattr, xattrpath)
+	}
+
+	return xattrpath, st.Mode(), err
 }
 
 func setAttr(path, name string, value []byte, flag int) error {

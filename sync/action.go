@@ -2,9 +2,13 @@ package sync
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/mildred/doc/attrs"
 	"github.com/mildred/doc/repo"
@@ -20,6 +24,8 @@ type CopyAction struct {
 	Link        bool
 	SrcMode     os.FileMode
 	OrigDstMode os.FileMode
+	manualMode  bool
+	srcInfo     os.FileInfo
 }
 
 func NewCopyAction(
@@ -29,10 +35,33 @@ func NewCopyAction(
 	size int64,
 	originaldst string,
 	conflict bool,
-	link bool,
 	srcMode os.FileMode,
 	origDstMode os.FileMode) *CopyAction {
-	return &CopyAction{src, dst, hash, size, originaldst, conflict, link, srcMode, origDstMode}
+	return &CopyAction{src, dst, hash, size, originaldst, conflict, false, srcMode, origDstMode, false, nil}
+}
+
+func NewCopyFile(
+	src string,
+	dst string,
+	hash []byte,
+	info os.FileInfo) *CopyAction {
+	return &CopyAction{src, dst, hash, size(info), "", false, false, info.Mode(), 0, true, info}
+}
+
+func NewCreateDir(src string, dst string, srcInfo os.FileInfo) *CopyAction {
+	return &CopyAction{
+		src,
+		dst,
+		nil,
+		0,
+		"",
+		false,
+		false,
+		srcInfo.Mode(),
+		0,
+		true,
+		srcInfo,
+	}
 }
 
 func (act *CopyAction) IsConflict() bool {
@@ -54,6 +83,86 @@ func (act *CopyAction) Run() error {
 		if err != nil {
 			return fmt.Errorf("link %s: %s", act.Dst, err.Error())
 		}
+	} else if act.manualMode && act.srcInfo.Mode()&^(os.ModeDir /*|os.ModeSymlink*/) == 0 { // FIXME: enable symlinks
+		stat, ok := act.srcInfo.Sys().(*syscall.Stat_t)
+
+		if !ok {
+			panic("Could not get Stat_t")
+		}
+
+		symlink := act.srcInfo.Mode()&os.ModeSymlink != 0
+
+		if act.srcInfo.IsDir() {
+			err = os.Mkdir(act.Dst, 0700)
+			if err != nil {
+				return err
+			}
+		} else if symlink {
+			link, err := os.Readlink(act.Src)
+			if err != nil {
+				return err
+			}
+
+			err = os.Symlink(link, act.Dst)
+			if err != nil {
+				return err
+			}
+		} else {
+			f, err := os.OpenFile(act.Dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			f0, err := os.Open(act.Src)
+			if err != nil {
+				return err
+			}
+			defer f0.Close()
+
+			_, err = io.Copy(f, f0)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = os.Lchown(act.Dst, int(stat.Uid), int(stat.Gid))
+		if err != nil {
+			log.Println(err)
+			err = nil
+		}
+
+		if !symlink {
+
+			atime := time.Unix(stat.Atim.Sec, stat.Atim.Nsec)
+			err = os.Chtimes(act.Dst, atime, act.srcInfo.ModTime())
+			if err != nil {
+				return err
+			}
+
+			err = os.Chmod(act.Dst, act.SrcMode)
+			if err != nil {
+				return err
+			}
+
+			// FIXME: extended attributes for symlinks
+			// golang is missing some syscalls
+
+			xattr, values, err := attrs.GetList(act.Src)
+			if err != nil {
+				return err
+			}
+
+			for i, attrname := range xattr {
+				err = attrs.Set(act.Src, attrname, values[i])
+				if err != nil {
+					return err
+				}
+			}
+
+		}
+
+		return nil
 	} else {
 		cmd := exec.Command("cp", "-a", "--reflink=auto", "-d", act.Src, act.Dst)
 		cmd.Stderr = os.Stderr

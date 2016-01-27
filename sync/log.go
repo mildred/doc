@@ -70,7 +70,8 @@ func (l *Logger) Print() {
 	}
 	fmt.Printf("\x1b[K\n")
 	fmt.Printf(
-		"\x1b[KScanning: %d files (%d bytes, %d files to copy) %s\n",
+		"\x1b[KScanning: %d files (%d bytes, %d files to copy)\n"+
+			"\x1b[K  %s\n",
 		l.scan.num_files, l.scan.total_bytes, l.scan.total_files, filepath.Base(l.scan.src))
 	if l.scan.src_hash {
 		fmt.Printf("\x1b[K  From: %s (hashing)\n", filepath.Dir(l.scan.src))
@@ -87,15 +88,16 @@ func (l *Logger) Print() {
 		percentItems := 100.0 * float64(l.exec.item) / float64(l.scan.total_files)
 		percentBytes := 100.0 * float64(l.exec.bytes) / float64(l.scan.total_bytes)
 		fmt.Printf(
-			"\x1b[KCopying: %d bytes %2.0f%% (file %d %2.0f%%) %s\n"+
+			"\x1b[KCopying: %d bytes %2.0f%% (file %d %2.0f%%)\n"+
+				"\x1b[K  %s\n"+
 				"\x1b[K  From: %s\n"+
 				"\x1b[K  To:   %s\n",
 			l.exec.bytes, percentBytes, l.exec.item, percentItems, filepath.Base(l.exec.dst),
 			filepath.Dir(l.exec.src),
 			filepath.Dir(l.exec.dst))
-		fmt.Printf("\x1b[K\x1b[7A")
+		fmt.Printf("\x1b[K\x1b[9A")
 	} else {
-		fmt.Printf("\x1b[K\x1b[4A")
+		fmt.Printf("\x1b[K\x1b[5A")
 	}
 }
 
@@ -103,8 +105,8 @@ func (l *Logger) Clear() {
 	if l.quiet {
 		return
 	}
-	fmt.Printf("\n\n\n\n")
+	fmt.Printf("\n\n\n\n\n")
 	if l.copying {
-		fmt.Printf("\n\n\n")
+		fmt.Printf("\n\n\n\n")
 	}
 }

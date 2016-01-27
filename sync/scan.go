@@ -72,29 +72,87 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 
 	if os.IsNotExist(dsterr) && srcerr == nil {
 
-		var srchash []byte
+		if srci.IsDir() {
 
-		if !srci.IsDir() {
-			srchash, err = repo.GetHash(src, srci, p.Dedup != nil)
+			res := p.HandleAction(*NewCreateDir(src, dst, srci))
+			if !res {
+				return false
+			}
+
+			f, err := os.Open(src)
 			if err != nil {
 				return p.HandleError(err)
 			}
-		}
+			defer f.Close()
 
-		res := p.HandleAction(*NewCopyAction(src, dst, srchash, size(srci), "", false, false, srci.Mode(), 0))
-		p.TotalBytes += uint64(size(srci))
-		return res
+			names, err := f.Readdirnames(-1)
+			if err != nil {
+				return p.HandleError(err)
+			}
+
+			for _, name := range names {
+				if !p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+					return false
+				}
+			}
+
+			return true
+
+		} else {
+
+			var srchash []byte
+
+			if !srci.IsDir() {
+				srchash, err = repo.GetHash(src, srci, p.Dedup != nil)
+				if err != nil {
+					return p.HandleError(err)
+				}
+			}
+
+			res := p.HandleAction(*NewCopyFile(src, dst, srchash, srci))
+			p.TotalBytes += uint64(size(srci))
+			return res
+		}
 
 	}
 
 	//
-	// [Bidir] File in destination but not in source
+	// [Bidir] File in destination but not in source: reverse copy
 	//
 
-	if (p.Bidir || p.Dedup != nil) && os.IsNotExist(srcerr) && dsterr == nil {
+	if p.Bidir && os.IsNotExist(srcerr) && dsterr == nil {
 
-		// Synchronize in the other direction
-		if p.Bidir {
+		// FIXME: this could probably be simplified into
+		// return p.PrepareCopy(dst, src)
+
+		if dsti.IsDir() {
+
+			res := p.HandleAction(*NewCreateDir(dst, src, dsti))
+			if !res {
+				return false
+			}
+
+			f, err := os.Open(dst)
+			if err != nil {
+				return p.HandleError(err)
+			}
+			defer f.Close()
+
+			names, err := f.Readdirnames(-1)
+			if err != nil {
+				return p.HandleError(err)
+			}
+
+			for _, name := range names {
+				if !p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+					return false
+				}
+			}
+
+			return true
+
+		} else {
+
 			var dsthash []byte
 			if !dsti.IsDir() {
 				dsthash, err = repo.GetHash(dst, dsti, p.Dedup != nil)
@@ -103,21 +161,25 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 				}
 			}
 
-			res := p.HandleAction(*NewCopyAction(dst, src, dsthash, size(dsti), "", false, false, dsti.Mode(), 0))
+			res := p.HandleAction(*NewCopyAction(dst, src, dsthash, size(dsti), "", false, dsti.Mode(), 0))
 			p.TotalBytes += uint64(size(dsti))
 			return res
 		}
+	}
 
-		// Record dst hash in case we move it
-		if p.Dedup != nil {
-			hash, err := repo.GetHash(dst, dsti, p.CheckHash)
-			if err != nil {
-				if !p.HandleError(err) {
-					return false
-				}
-			} else if hash != nil {
-				p.Dedup[string(hash)] = append(p.Dedup[string(hash)], dst)
+	//
+	// [Dedup] File in destination but not in source: register in dedup
+	//
+
+	if p.Dedup != nil && os.IsNotExist(srcerr) && dsterr == nil {
+
+		hash, err := repo.GetHash(dst, dsti, p.CheckHash)
+		if err != nil {
+			if !p.HandleError(err) {
+				return false
 			}
+		} else if hash != nil {
+			p.Dedup[string(hash)] = append(p.Dedup[string(hash)], dst)
 		}
 	}
 
@@ -239,7 +301,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 		dstname := repo.FindConflictFileName(dst, srch)
 		if dstname != "" {
 			p.TotalBytes += uint64(size(srci))
-			if !p.HandleAction(*NewCopyAction(src, dstname, srch, size(srci), dst, true, false, srci.Mode(), dsti.Mode())) {
+			if !p.HandleAction(*NewCopyAction(src, dstname, srch, size(srci), dst, true, srci.Mode(), dsti.Mode())) {
 				return false
 			}
 		}
@@ -249,7 +311,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 		srcname := repo.FindConflictFileName(src, dsth)
 		if srcname != "" {
 			p.TotalBytes += uint64(size(dsti))
-			if !p.HandleAction(*NewCopyAction(dst, srcname, dsth, size(dsti), src, true, false, dsti.Mode(), srci.Mode())) {
+			if !p.HandleAction(*NewCopyAction(dst, srcname, dsth, size(dsti), src, true, dsti.Mode(), srci.Mode())) {
 				return false
 			}
 		}
