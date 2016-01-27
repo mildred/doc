@@ -1,15 +1,14 @@
 package main
 
 import (
-  "flag"
-  "fmt"
-  "os"
+	"flag"
+	"fmt"
+	"os"
 
-  sync "github.com/mildred/doc/sync"
+	sync "github.com/mildred/doc/sync"
 )
 
-const syncUsage string =
-`doc sync [OPTIONS...] [SRC] DEST
+const syncUsage string = `doc sync [OPTIONS...] [SRC] DEST
 doc sync [OPTIONS...] -from SRC [DEST]
 doc sync [OPTIONS...] -to DEST [SRC]
 
@@ -39,8 +38,7 @@ hash will be computed and that can introduce a delay.
 Options:
 `
 
-const copyUsage string =
-`doc cp [OPTIONS...] [SRC] DEST
+const copyUsage string = `doc cp [OPTIONS...] [SRC] DEST
 doc cp [OPTIONS...] -from SRC [DEST]
 doc cp [OPTIONS...] -to DEST [SRC]
 
@@ -69,72 +67,70 @@ Options:
 `
 
 func mainCopy(args []string) int {
-  f := flag.NewFlagSet("cp", flag.ExitOnError)
-  opt_dry_run := f.Bool("n", false, "Dry run")
-  opt_quiet   := f.Bool("q", false, "Quiet")
-  opt_force   := f.Bool("f", false, "Force copy even if there are errors")
-  opt_hash    := f.Bool("c", false, "If necessary, check real hash when deduplicating")
-  opt_dedup   := f.Bool("d", false, "Deduplicate files on destination (link files on destination instead of copying them from source if possible)")
-  opt_dd      := f.Bool("dd", false, "Like -d but also remove duplicate files")
-  opt_from    := f.String("from", "", "Specify the source directory")
-  opt_to      := f.String("to", "", "Specify the destination directory")
-  opt_commit  := f.Bool("commit", false, "Commit the new hash if it has been computed")
-  opt_2pass   := f.Bool("2", false, "Scan before copy in two distinct pass")
-  f.Usage = func(){
-    fmt.Print(copyUsage)
-    f.PrintDefaults()
-  }
-  f.Parse(args)
+	f := flag.NewFlagSet("cp", flag.ExitOnError)
+	opt_dry_run := f.Bool("n", false, "Dry run")
+	opt_quiet := f.Bool("q", false, "Quiet")
+	opt_force := f.Bool("f", false, "Force copy even if there are errors")
+	opt_hash := f.Bool("c", false, "If necessary, check real hash when deduplicating")
+	opt_dedup := f.Bool("d", false, "Deduplicate files on destination (link files on destination instead of copying them from source if possible)")
+	opt_dd := f.Bool("dd", false, "Like -d but also remove duplicate files")
+	opt_from := f.String("from", "", "Specify the source directory")
+	opt_to := f.String("to", "", "Specify the destination directory")
+	opt_commit := f.Bool("commit", false, "Commit the new hash if it has been computed")
+	opt_2pass := f.Bool("2", false, "Scan before copy in two distinct pass")
+	f.Usage = func() {
+		fmt.Print(copyUsage)
+		f.PrintDefaults()
+	}
+	f.Parse(args)
 
-  src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  sync_opts := sync.SyncOptions{
-    DryRun:    *opt_dry_run,
-    Force:     *opt_force,
-    Quiet:     *opt_quiet,
-    Commit:    *opt_commit,
-    Dedup:     *opt_dedup || *opt_dd,
-    DeleteDup: *opt_dd,
-    CheckHash: *opt_hash,
-    Bidir:     false,
-    TwoPass:   *opt_2pass,
-  }
-  if sync.Sync(src, dst, sync_opts) > 0 {
-    os.Exit(1)
-  }
-  return 0
+	src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
+	sync_opts := sync.SyncOptions{
+		DryRun:    *opt_dry_run,
+		Force:     *opt_force,
+		Quiet:     *opt_quiet,
+		Commit:    *opt_commit,
+		Dedup:     *opt_dedup || *opt_dd,
+		DeleteDup: *opt_dd,
+		CheckHash: *opt_hash,
+		Bidir:     false,
+		TwoPass:   *opt_2pass,
+	}
+	if sync.Sync(src, dst, sync_opts) > 0 {
+		os.Exit(1)
+	}
+	return 0
 }
 
 func mainSync(args []string) int {
-  f := flag.NewFlagSet("sync", flag.ExitOnError)
-  opt_dry_run := f.Bool("n", false, "Dry run")
-  opt_quiet   := f.Bool("q", false, "Quiet")
-  opt_force   := f.Bool("f", false, "Force copy even if there are errors")
-  opt_from    := f.String("from", "", "Specify the source directory")
-  opt_to      := f.String("to", "", "Specify the destination directory")
-  opt_commit  := f.Bool("commit", false, "Commit the new hash if it has been computed")
-  opt_2pass   := f.Bool("2", false, "Scan before copy in two distinct pass")
-  f.Usage = func(){
-    fmt.Print(syncUsage)
-    f.PrintDefaults()
-  }
-  f.Parse(args)
+	f := flag.NewFlagSet("sync", flag.ExitOnError)
+	opt_dry_run := f.Bool("n", false, "Dry run")
+	opt_quiet := f.Bool("q", false, "Quiet")
+	opt_force := f.Bool("f", false, "Force copy even if there are errors")
+	opt_from := f.String("from", "", "Specify the source directory")
+	opt_to := f.String("to", "", "Specify the destination directory")
+	opt_commit := f.Bool("commit", false, "Commit the new hash if it has been computed")
+	opt_2pass := f.Bool("2", false, "Scan before copy in two distinct pass")
+	f.Usage = func() {
+		fmt.Print(syncUsage)
+		f.PrintDefaults()
+	}
+	f.Parse(args)
 
-  src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
-  sync_opts := sync.SyncOptions{
-    DryRun:    *opt_dry_run,
-    Force:     *opt_force,
-    Quiet:     *opt_quiet,
-    Commit:    *opt_commit,
-    Dedup:     false,
-    DeleteDup: false,
-    CheckHash: false,
-    Bidir:     true,
-    TwoPass:   *opt_2pass,
-  }
-  if sync.Sync(src, dst, sync_opts) > 0 {
-    os.Exit(1)
-  }
-  return 0
+	src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
+	sync_opts := sync.SyncOptions{
+		DryRun:    *opt_dry_run,
+		Force:     *opt_force,
+		Quiet:     *opt_quiet,
+		Commit:    *opt_commit,
+		Dedup:     false,
+		DeleteDup: false,
+		CheckHash: false,
+		Bidir:     true,
+		TwoPass:   *opt_2pass,
+	}
+	if sync.Sync(src, dst, sync_opts) > 0 {
+		os.Exit(1)
+	}
+	return 0
 }
-
-
