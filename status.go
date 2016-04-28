@@ -8,6 +8,7 @@ import (
 
 	base58 "github.com/jbenet/go-base58"
 	attrs "github.com/mildred/doc/attrs"
+	ignore "github.com/mildred/doc/ignore"
 	repo "github.com/mildred/doc/repo"
 )
 
@@ -32,6 +33,7 @@ func mainStatus(args []string) int {
 	f := flag.NewFlagSet("status", flag.ExitOnError)
 	opt_no_par2 := f.Bool("n", false, "Do not show files missing PAR2 redundency data")
 	opt_show_only_hash := f.Bool("c", false, "Show only unchanged committed files with their hash")
+	opt_no_docignore := f.Bool("no-docignore", false, "Don't treat .docignore files specially")
 	f.Usage = func() {
 		fmt.Print(usageStatus)
 		f.PrintDefaults()
@@ -51,6 +53,11 @@ func mainStatus(args []string) int {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
 			status = 1
 			return err
+		}
+
+		// Skip directories containing an empty .docignore file
+		if !*opt_no_docignore && ignore.IsIgnored(path) {
+			return filepath.SkipDir
 		}
 
 		// Skip .dirstore/ at root

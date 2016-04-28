@@ -8,6 +8,7 @@ import (
 
 	base58 "github.com/jbenet/go-base58"
 	attrs "github.com/mildred/doc/attrs"
+	ignore "github.com/mildred/doc/ignore"
 	repo "github.com/mildred/doc/repo"
 )
 
@@ -23,6 +24,7 @@ Options:
 func mainSave(args []string) int {
 	f := flag.NewFlagSet("save", flag.ExitOnError)
 	opt_force := f.Bool("force", false, "Force writing xattrs on read only files")
+	opt_nodocignore := f.Bool("no-docignore", false, "Don't respect .docignore")
 	f.Usage = func() {
 		fmt.Print(saveUsage)
 		f.PrintDefaults()
@@ -46,6 +48,10 @@ func mainSave(args []string) int {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
 			status = 1
 			return err
+		}
+
+		if !*opt_nodocignore && ignore.IsIgnored(path) {
+			return filepath.SkipDir
 		}
 
 		// Skip .dirstore/ at root

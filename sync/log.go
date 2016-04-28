@@ -6,8 +6,9 @@ import (
 )
 
 type Logger struct {
-	quiet bool
-	scan  struct {
+	quiet   bool
+	verbose bool
+	scan    struct {
 		src         string
 		src_hash    bool
 		dst         string
@@ -26,7 +27,7 @@ type Logger struct {
 	num_errors int
 }
 
-func NewLogger(quiet bool) *Logger {
+func NewLogger(quiet, verbose bool) *Logger {
 	return &Logger{quiet: quiet}
 }
 

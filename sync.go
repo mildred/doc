@@ -84,6 +84,8 @@ func mainCopy(args []string) int {
 	opt_to := f.String("to", "", "Specify the destination directory")
 	opt_commit := f.Bool("commit", false, "Commit the new hash if it has been computed (appear in both source and destination)")
 	opt_2pass := f.Bool("2", false, "Scan before copy in two distinct pass")
+	opt_nodocignore := f.Bool("no-docignore", false, "Don't respect .docignore")
+	opt_verbose := f.Bool("v", false, "Verbose mode")
 	f.Usage = func() {
 		fmt.Print(copyUsage)
 		f.PrintDefaults()
@@ -96,6 +98,7 @@ func mainCopy(args []string) int {
 			Commit:    *opt_commit,
 			CheckHash: *opt_hash,
 			Bidir:     false,
+			DocIgnore: !*opt_nodocignore,
 		},
 		DryRun:    *opt_dry_run,
 		Force:     *opt_force,
@@ -103,6 +106,7 @@ func mainCopy(args []string) int {
 		Dedup:     *opt_dedup || *opt_dd,
 		DeleteDup: *opt_dd,
 		TwoPass:   *opt_2pass,
+		Verbose:   *opt_verbose,
 	}
 	if sync.Sync(src, dst, sync_opts) > 0 {
 		os.Exit(1)
@@ -119,6 +123,8 @@ func mainSync(args []string) int {
 	opt_to := f.String("to", "", "Specify the destination directory")
 	opt_commit := f.Bool("commit", false, "Commit the new hash if it has been computed")
 	opt_2pass := f.Bool("2", false, "Scan before copy in two distinct pass")
+	opt_nodocignore := f.Bool("no-docignore", false, "Don't respect .docignore")
+	opt_verbose := f.Bool("v", false, "Verbose mode")
 	f.Usage = func() {
 		fmt.Print(syncUsage)
 		f.PrintDefaults()
@@ -131,6 +137,7 @@ func mainSync(args []string) int {
 			Commit:    *opt_commit,
 			CheckHash: false,
 			Bidir:     true,
+			DocIgnore: !*opt_nodocignore,
 		},
 		DryRun:    *opt_dry_run,
 		Force:     *opt_force,
@@ -138,6 +145,7 @@ func mainSync(args []string) int {
 		Dedup:     false,
 		DeleteDup: false,
 		TwoPass:   *opt_2pass,
+		Verbose:   *opt_verbose,
 	}
 	if sync.Sync(src, dst, sync_opts) > 0 {
 		os.Exit(1)

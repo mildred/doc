@@ -2,6 +2,8 @@ package sync
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/mildred/doc/ignore"
 	"github.com/mildred/doc/repo"
 	"os"
 	"path/filepath"
@@ -17,11 +19,17 @@ type FilePreparatorOpts struct {
 
 	// If true, commit new hash for out of date files
 	Commit bool
+
+	// Respect .docignore files
+	DocIgnore bool
 }
 
 type FilePreparator struct {
 	PreparatorArgs
 	FilePreparatorOpts
+
+	// Verbose
+	Verbose bool
 
 	// Total bytes scanned that can be counted (excluding directories)
 	TotalBytes uint64
@@ -75,6 +83,13 @@ func (p *FilePreparator) prepareCopy(src, dst string) bool {
 
 		if srci.IsDir() {
 
+			if p.DocIgnore && ignore.IsIgnored(src) {
+				if p.Verbose {
+					fmt.Printf("Ignoring %s\n", src)
+				}
+				return true
+			}
+
 			res := p.HandleAction(*NewCreateDir(src, dst, srci))
 			if !res {
 				return false
@@ -127,6 +142,13 @@ func (p *FilePreparator) prepareCopy(src, dst string) bool {
 		// return p.prepareCopy(dst, src)
 
 		if dsti.IsDir() {
+
+			if p.DocIgnore && ignore.IsIgnored(dst) {
+				if p.Verbose {
+					fmt.Printf("Ignoring %s\n", dst)
+				}
+				return true
+			}
 
 			res := p.HandleAction(*NewCreateDir(dst, src, dsti))
 			if !res {
@@ -201,6 +223,13 @@ func (p *FilePreparator) prepareCopy(src, dst string) bool {
 	//
 
 	if srci.IsDir() && dsti.IsDir() {
+
+		if p.DocIgnore && (ignore.IsIgnored(src) || ignore.IsIgnored(dst)) {
+			if p.Verbose {
+				fmt.Printf("Ignoring %s (source and destination)\n", src)
+			}
+			return true
+		}
 
 		var srcnames map[string]bool
 

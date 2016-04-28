@@ -57,6 +57,9 @@ type SyncOptions struct {
 
 	// Scan first and copy after scanning is completed only.
 	TwoPass bool
+
+	// Verbose
+	Verbose bool
 }
 
 func Sync(src, dst string, opt SyncOptions) (numErrors int) {
@@ -70,7 +73,7 @@ func Sync(src, dst string, opt SyncOptions) (numErrors int) {
 		fmt.Printf("Destination: %s\n", dst)
 	}
 
-	logger := NewLogger(opt.Quiet)
+	logger := NewLogger(opt.Quiet, opt.Verbose)
 
 	var actions_chan chan *CopyAction = make(chan *CopyAction, 100)
 	var actions_slice []*CopyAction

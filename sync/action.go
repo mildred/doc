@@ -164,13 +164,18 @@ func (act *CopyAction) Run() error {
 
 		return nil
 	} else {
-		cmd := exec.Command("cp", "-a", "--reflink=auto", "-d", act.Src, act.Dst)
+		cmd := exec.Command("/bin/cp", "-a", "--no-preserve=mode", "--reflink=auto", "-d", act.Src, act.Dst)
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
 			return fmt.Errorf("cp %s: %s", act.Dst, err.Error())
 		}
+		err = os.Chmod(act.Dst, act.SrcMode)
+		if err != nil {
+			return err
+		}
 	}
+
 	if act.Conflict {
 		if act.SrcMode&os.ModeSymlink == 0 {
 			err = repo.MarkConflictFor(act.Dst, filepath.Base(act.OriginalDst))

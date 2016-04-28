@@ -9,6 +9,7 @@ import (
 	base58 "github.com/jbenet/go-base58"
 	attrs "github.com/mildred/doc/attrs"
 	commit "github.com/mildred/doc/commit"
+	ignore "github.com/mildred/doc/ignore"
 	repo "github.com/mildred/doc/repo"
 )
 
@@ -28,6 +29,7 @@ func mainCommit(args []string) int {
 	f := flag.NewFlagSet("commit", flag.ExitOnError)
 	opt_force := f.Bool("f", false, "Force writing xattrs on read only files")
 	opt_nodoccommit := f.Bool("n", false, "Don't write .doccommit")
+	opt_nodocignore := f.Bool("no-docignore", false, "Don't respect .docignore")
 	f.Usage = func() {
 		fmt.Print(commitUsage)
 		f.PrintDefaults()
@@ -62,6 +64,10 @@ func mainCommit(args []string) int {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			status = 1
 			return err
+		}
+
+		if !*opt_nodocignore && ignore.IsIgnored(path) {
+			return filepath.SkipDir
 		}
 
 		// Skip .dirstore/ at root and .doccommit
