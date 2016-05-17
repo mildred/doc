@@ -5,7 +5,40 @@ import (
 	"os"
 )
 
+type Preparator interface {
+	PrepareCopy(src, dst string)
+	ScanStatus() (files, bytes uint64)
+}
+
+type PreparatorArgs struct {
+	// Gather dediplication data if not nil: for each hash (as keys, binary hash:
+	// not digests), store a list of matching paths (for the destination directory
+	// only).
+	Dedup map[string][]string
+
+	// [MANDATORY] Called when an action is to be taken. Should return true. False
+	// is used to stop scanning
+	HandleAction func(act CopyAction) bool
+
+	// [MANDATORY] Called when an error happens. Should return true to continue
+	// scanning or false to stop scaning.
+	HandleError func(e error) bool
+
+	// Logger to be called for each scanned item
+	// Always called with hashing to false. When performing hashing, it is called
+	// a second or a third time with either hash_src or hash_dst set to true,
+	// depending on which file is being hashed.
+	Logger func(p Preparator, src, dst string, hash_src, hash_dst bool)
+}
+
+type PreparatorOptions interface {
+	Preparator(args *PreparatorArgs) Preparator
+}
+
 type SyncOptions struct {
+	// Preparator, if nil, DefaultPreparator is used
+	Preparator PreparatorOptions
+
 	// Don't execute synchronisation, just print what it would have done
 	DryRun bool
 
@@ -15,22 +48,12 @@ type SyncOptions struct {
 	// If true, do not print anything except errors
 	Quiet bool
 
-	// If true, commit new hash for out of date files
-	Commit bool
-
 	// If true, try to hard link files from within the destination directory if
 	// possible instead of copying them from the source directory.
 	Dedup bool
 
 	// Delete duplicates in destination that are not in source
 	DeleteDup bool
-
-	// If true, scan files that are out of date to get the new hash
-	CheckHash bool
-
-	// Bidirectional scan: return actions to synchronize both from source to
-	// destination and from destination to source.
-	Bidir bool
 
 	// Scan first and copy after scanning is completed only.
 	TwoPass bool
@@ -53,12 +76,9 @@ func Sync(src, dst string, opt SyncOptions) (numErrors int) {
 	var actions_slice []*CopyAction
 	var actions_closed bool = false
 
-	prep := &Preparator{
-		CheckHash: opt.CheckHash,
-		Bidir:     opt.Bidir,
-		Commit:    opt.Commit,
-		Dedup:     dedup_map,
-		Logger:    logger.LogPrepare,
+	prep := opt.Preparator.Preparator(&PreparatorArgs{
+		Dedup:  dedup_map,
+		Logger: logger.LogPrepare,
 		HandleError: func(e error) bool {
 			logger.LogError(e)
 			if !opt.Force && !opt.DryRun {
@@ -83,7 +103,7 @@ func Sync(src, dst string, opt SyncOptions) (numErrors int) {
 				return false
 			}
 		},
-	}
+	})
 
 	defer logger.Clear()
 

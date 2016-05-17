@@ -22,6 +22,8 @@ func init() {
 		"commit":  mainCommit,
 		"cp":      mainCopy,
 		"sync":    mainSync,
+		"pull":    mainPull,
+		"push":    mainPush,
 		"save":    mainSave,
 		"dupes":   mainDupes,
 		"missing": mainMissing,
@@ -72,6 +74,8 @@ Synchronisation commands:
 
         cp
         sync
+        pull
+        push
 
 Other commands:
 
@@ -80,7 +84,7 @@ Other commands:
 var described_commands []string = []string{
 	"check", "show", "status", "missing",
 	"init", "commit", "save",
-	"cp", "sync",
+	"cp", "sync", "pull", "push",
 }
 
 const helpText2 string = `

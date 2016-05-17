@@ -30,13 +30,12 @@ func NewLogger(quiet bool) *Logger {
 	return &Logger{quiet: quiet}
 }
 
-func (l *Logger) LogPrepare(p *Preparator, src, dst string, hash_src, hash_dst bool) {
+func (l *Logger) LogPrepare(p Preparator, src, dst string, hash_src, hash_dst bool) {
 	l.scan.src = src
 	l.scan.src_hash = hash_src
 	l.scan.dst = dst
 	l.scan.dst_hash = hash_dst
-	l.scan.num_files = p.NumFiles
-	l.scan.total_bytes = p.TotalBytes
+	l.scan.num_files, l.scan.total_bytes = p.ScanStatus()
 	l.Print()
 }
 

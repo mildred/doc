@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-type Preparator struct {
+type FilePreparatorOpts struct {
 	// If true, scan files that are out of date to get the new hash
 	CheckHash bool
 
@@ -17,25 +17,11 @@ type Preparator struct {
 
 	// If true, commit new hash for out of date files
 	Commit bool
+}
 
-	// Gather dediplication data if not nil: for each hash (as keys, binary hash:
-	// not digests), store a list of matching paths (for the destination directory
-	// only).
-	Dedup map[string][]string
-
-	// [MANDATORY] Called when an action is to be taken. Should return true. False
-	// is used to stop scanning
-	HandleAction func(act CopyAction) bool
-
-	// [MANDATORY] Called when an error happens. Should return true to continue
-	// scanning or false to stop scaning.
-	HandleError func(e error) bool
-
-	// Logger to be called for each scanned item
-	// Always called with hashing to false. When performing hashing, it is called
-	// a second or a third time with either hash_src or hash_dst set to true,
-	// depending on which file is being hashed.
-	Logger func(p *Preparator, src, dst string, hash_src, hash_dst bool)
+type FilePreparator struct {
+	PreparatorArgs
+	FilePreparatorOpts
 
 	// Total bytes scanned that can be counted (excluding directories)
 	TotalBytes uint64
@@ -47,6 +33,17 @@ type Preparator struct {
 	hashingMsg bool
 }
 
+func (p *FilePreparatorOpts) Preparator(args *PreparatorArgs) Preparator {
+	return &FilePreparator{
+		PreparatorArgs:     *args,
+		FilePreparatorOpts: *p,
+	}
+}
+
+func (p *FilePreparator) ScanStatus() (files, bytes uint64) {
+	return p.NumFiles, p.TotalBytes
+}
+
 func size(info os.FileInfo) int64 {
 	if info.Mode()&os.ModeSymlink != 0 {
 		return 0
@@ -55,7 +52,11 @@ func size(info os.FileInfo) int64 {
 	return info.Size()
 }
 
-func (p *Preparator) PrepareCopy(src, dst string) bool {
+func (p *FilePreparator) PrepareCopy(src, dst string) {
+	p.prepareCopy(src, dst)
+}
+
+func (p *FilePreparator) prepareCopy(src, dst string) bool {
 	var err error
 
 	if p.Logger != nil {
@@ -91,7 +92,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 			}
 
 			for _, name := range names {
-				if !p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+				if !p.prepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
 					return false
 				}
 			}
@@ -123,7 +124,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 	if p.Bidir && os.IsNotExist(srcerr) && dsterr == nil {
 
 		// FIXME: this could probably be simplified into
-		// return p.PrepareCopy(dst, src)
+		// return p.prepareCopy(dst, src)
 
 		if dsti.IsDir() {
 
@@ -144,7 +145,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 			}
 
 			for _, name := range names {
-				if !p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+				if !p.prepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
 					return false
 				}
 			}
@@ -221,7 +222,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 			if p.Bidir {
 				srcnames[name] = true
 			}
-			if !p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+			if !p.prepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
 				return false
 			}
 		}
@@ -242,7 +243,7 @@ func (p *Preparator) PrepareCopy(src, dst string) bool {
 				if srcnames[name] {
 					continue
 				}
-				if !p.PrepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
+				if !p.prepareCopy(filepath.Join(src, name), filepath.Join(dst, name)) {
 					return false
 				}
 			}

@@ -92,14 +92,16 @@ func mainCopy(args []string) int {
 
 	src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
 	sync_opts := sync.SyncOptions{
+		Preparator: &sync.FilePreparatorOpts{
+			Commit:    *opt_commit,
+			CheckHash: *opt_hash,
+			Bidir:     false,
+		},
 		DryRun:    *opt_dry_run,
 		Force:     *opt_force,
 		Quiet:     *opt_quiet,
-		Commit:    *opt_commit,
 		Dedup:     *opt_dedup || *opt_dd,
 		DeleteDup: *opt_dd,
-		CheckHash: *opt_hash,
-		Bidir:     false,
 		TwoPass:   *opt_2pass,
 	}
 	if sync.Sync(src, dst, sync_opts) > 0 {
@@ -125,14 +127,16 @@ func mainSync(args []string) int {
 
 	src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
 	sync_opts := sync.SyncOptions{
+		Preparator: &sync.FilePreparatorOpts{
+			Commit:    *opt_commit,
+			CheckHash: false,
+			Bidir:     true,
+		},
 		DryRun:    *opt_dry_run,
 		Force:     *opt_force,
 		Quiet:     *opt_quiet,
-		Commit:    *opt_commit,
 		Dedup:     false,
 		DeleteDup: false,
-		CheckHash: false,
-		Bidir:     true,
 		TwoPass:   *opt_2pass,
 	}
 	if sync.Sync(src, dst, sync_opts) > 0 {
