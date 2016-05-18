@@ -27,6 +27,7 @@ func init() {
 		"save":    mainSave,
 		"dupes":   mainDupes,
 		"missing": mainMissing,
+		"unannex": mainUnannex,
 	}
 }
 
