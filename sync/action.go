@@ -164,6 +164,7 @@ func (act *CopyAction) Run() error {
 
 		return nil
 	} else {
+		os.MkdirAll(filepath.Dir(act.Dst), 0755) // Ignore error
 		cmd := exec.Command("/bin/cp", "-a", "--no-preserve=mode", "--reflink=auto", "-d", act.Src, act.Dst)
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
