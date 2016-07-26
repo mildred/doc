@@ -12,8 +12,9 @@ const usageMissing string = `doc missing [OPTIONS...] [SRC] DEST
 doc missing [OPTIONS...] -from SRC [DEST]
 doc missing [OPTIONS...] -to DEST [SRC]
 
-Show files in SRC that are different from the same files in DEST. Lines start
-with a symbol, followed by the file hash and the file name.
+Show files in SRC that are different from the same files in DEST (only committed
+changes). Lines start with a symbol, followed by the file hash and the file
+name.
 
   -     Represents the file in SRC
   +     Represents the file in DEST
