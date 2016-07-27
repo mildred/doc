@@ -17,6 +17,8 @@ conflict, and new files are added.
 Before copying, no check is performed to make sure that the file has not been
 modified since last commit. It is assumed that no file is modified.
 
+You should run doc commit on the destination directory afterwards.
+
 Options:
 `
 

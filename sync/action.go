@@ -165,11 +165,11 @@ func (act *CopyAction) Run() error {
 		return nil
 	} else {
 		os.MkdirAll(filepath.Dir(act.Dst), 0755) // Ignore error
-		cmd := exec.Command("/bin/cp", "-a", "--no-preserve=mode", "--reflink=auto", "-d", act.Src, act.Dst)
+		cmd := exec.Command("/bin/cp", "-a", "--no-preserve=mode", "--reflink=auto", "-d", "-T", act.Src, act.Dst)
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
-			return fmt.Errorf("cp %s: %s", act.Dst, err.Error())
+			return fmt.Errorf("cp %s %s: %s", act.Src, act.Dst, err.Error())
 		}
 		err = os.Chmod(act.Dst, act.SrcMode)
 		if err != nil {

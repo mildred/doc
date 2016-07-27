@@ -28,6 +28,7 @@ func init() {
 		"dupes":   mainDupes,
 		"missing": mainMissing,
 		"unannex": mainUnannex,
+		"diff":    mainDiff,
 	}
 }
 
@@ -64,6 +65,7 @@ Query commands:
         show
         status
         missing
+        diff
 
 Repository commands:
 
