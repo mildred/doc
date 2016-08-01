@@ -35,12 +35,12 @@ func (p *CommitPreparator) ScanStatus() (files, bytes uint64) {
 }
 
 func (p *CommitPreparator) PrepareCopy(src, dst string) {
-	source_files, err := commit.ReadByPath(path.Join(src, commit.Doccommit))
+	source_files, err := commit.ReadDirByPath(src)
 	if err != nil {
 		p.HandleError(err)
 		return
 	}
-	dest_files, err := commit.ReadByPath(path.Join(dst, commit.Doccommit))
+	dest_files, err := commit.ReadDirByPath(dst)
 	if err != nil {
 		p.HandleError(err)
 		return

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	commit "github.com/mildred/doc/commit"
 	"os"
-	"path/filepath"
 )
 
 const usageMissing string = `doc missing [OPTIONS...] [SRC] DEST
@@ -35,17 +34,14 @@ func mainMissing(args []string) int {
 	f.Parse(args)
 	src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
 
-	srccommit := filepath.Join(src, ".doccommit")
-	dstcommit := filepath.Join(dst, ".doccommit")
-
-	srcfiles, err := commit.ReadByPath(srccommit)
+	srcfiles, err := commit.ReadDirByPath(src)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %s", srccommit, err.Error())
+		fmt.Fprintf(os.Stderr, "%s: %s", src, err.Error())
 	}
 
-	dstfiles, err := commit.ReadByPath(dstcommit)
+	dstfiles, err := commit.ReadDirByPath(dst)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %s", dstcommit, err.Error())
+		fmt.Fprintf(os.Stderr, "%s: %s", dst, err.Error())
 	}
 
 	for file, shash := range srcfiles {

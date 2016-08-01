@@ -8,6 +8,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	base58 "github.com/jbenet/go-base58"
@@ -25,8 +26,16 @@ type CommitFileWriter struct {
 	hasher hash.Hash
 }
 
+func ReadDirByPath(dirPath string) (map[string]string, error) {
+	return readByPath(filepath.Join(dirPath, Doccommit))
+}
+
+func ReadDirByHash(dirPath string) (map[string][]string, error) {
+	return readByHash(filepath.Join(dirPath, Doccommit))
+}
+
 // hash is base58 encoded
-func ReadByPath(path string) (map[string]string, error) {
+func readByPath(path string) (map[string]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -46,7 +55,7 @@ func ReadByPath(path string) (map[string]string, error) {
 }
 
 // hash is base58 encoded
-func ReadByHash(path string) (map[string][]string, error) {
+func readByHash(path string) (map[string][]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
