@@ -17,7 +17,7 @@ func init() {
 		"help":    mainHelp,
 		"init":    mainInit,
 		"status":  mainStatus,
-		"show":    mainShow,
+		"info":    mainInfo,
 		"check":   mainCheck,
 		"commit":  mainCommit,
 		"cp":      mainCopy,
@@ -62,7 +62,7 @@ redundency information about each file (in case they become corrupt).
 Query commands:
 
         check
-        show
+        info
         status
         missing
         diff
@@ -85,7 +85,7 @@ Other commands:
 `
 
 var described_commands []string = []string{
-	"check", "show", "status", "missing",
+	"check", "info", "status", "missing",
 	"init", "commit", "save",
 	"cp", "sync", "pull", "push",
 }

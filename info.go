@@ -14,7 +14,7 @@ import (
 	repo "github.com/mildred/doc/repo"
 )
 
-const showUsage string = `doc show [OPTIONS...] FILE...
+const infoUsage string = `doc info [OPTIONS...] FILE...
 
 Show information about each file presented, including its status, hash and
 conflict status. It can also run integrity check on the files. It is a more
@@ -23,11 +23,11 @@ detailed version of doc status.
 Options:
 `
 
-func mainShow(args []string) int {
-	f := flag.NewFlagSet("show", flag.ExitOnError)
+func mainInfo(args []string) int {
+	f := flag.NewFlagSet("info", flag.ExitOnError)
 	opt_check := f.Bool("c", false, "Run integrity check")
 	f.Usage = func() {
-		fmt.Print(showUsage)
+		fmt.Print(infoUsage)
 		f.PrintDefaults()
 	}
 	f.Parse(args)
