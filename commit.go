@@ -42,15 +42,8 @@ func mainCommit(args []string) int {
 
 	status := 0
 
-	var doccommit *commit.CommitFileWriter
-	if !*opt_nodoccommit {
-		var err error
-		doccommit, err = commit.Create(filepath.Join(dir, ".doccommit"))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-	}
+	var commitEntries []commit.Entry
+	doCommit := !*opt_nodoccommit
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -73,7 +66,7 @@ func mainCommit(args []string) int {
 		// Skip .dirstore/ at root and .doccommit
 		if filepath.Base(path) == attrs.DirStoreName && filepath.Dir(path) == dir && info.IsDir() {
 			return filepath.SkipDir
-		} else if doccommit != nil && filepath.Join(dir, ".doccommit") == path {
+		} else if doCommit && filepath.Join(dir, commit.Doccommit) == path {
 			return nil
 		} else if info.IsDir() || !info.Mode().IsRegular() {
 			return nil
@@ -86,7 +79,7 @@ func mainCommit(args []string) int {
 		}
 
 		if err == nil && hashTime == info.ModTime() {
-			if doccommit != nil {
+			if doCommit {
 				hash, err := repo.GetHash(path, info, false)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%s\n", err.Error())
@@ -95,11 +88,7 @@ func mainCommit(args []string) int {
 					fmt.Fprintf(os.Stderr, "%s: hash not available\n", path)
 					status = 1
 				} else {
-					err := doccommit.AddEntry(hash, relpath)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "%s", err.Error())
-						status = 1
-					}
+					commitEntries = append(commitEntries, commit.Entry{hash, relpath})
 				}
 			}
 		} else {
@@ -110,12 +99,8 @@ func mainCommit(args []string) int {
 			} else if digest != nil {
 				fmt.Printf("%s %s\n", base58.Encode(digest), path)
 			}
-			if doccommit != nil {
-				err := doccommit.AddEntry(digest, relpath)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-					status = 1
-				}
+			if doCommit {
+				commitEntries = append(commitEntries, commit.Entry{digest, relpath})
 			}
 		}
 
@@ -127,8 +112,8 @@ func mainCommit(args []string) int {
 		status = 1
 	}
 
-	if doccommit != nil {
-		err := doccommit.Close()
+	if doCommit {
+		err := commit.WriteDir(dir, commitEntries)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			status = 1

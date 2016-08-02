@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,12 +27,93 @@ type CommitFileWriter struct {
 	hasher hash.Hash
 }
 
+type Entry struct {
+	Hash []byte
+	Path string
+}
+
 func ReadDirByPath(dirPath string) (map[string]string, error) {
 	return readByPath(filepath.Join(dirPath, Doccommit))
 }
 
 func ReadDirByHash(dirPath string) (map[string][]string, error) {
 	return readByHash(filepath.Join(dirPath, Doccommit))
+}
+
+func WriteDir(dirPath string, entries []Entry) error {
+	var data []byte
+
+	for _, e := range entries {
+		data = append(data, []byte(fmt.Sprintf("%s\t%s\n", base58.Encode(e.Hash), EncodePath(e.Path)))...)
+	}
+
+	digest, err := mh.Encode(sha1.New().Sum(data), mh.SHA1)
+	if err != nil {
+		panic(err)
+	}
+
+	f, err := ioutil.TempFile(dirPath, Doccommit)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.Write(data)
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+
+	// Check that the .doccommit file is clean (not manually modified)
+
+	newpath := filepath.Join(dirPath, Doccommit)
+	info, err := os.Lstat(newpath)
+	if !os.IsNotExist(err) {
+		hash, err := attrs.Get(newpath, XattrCommit)
+		if err != nil {
+			return fmt.Errorf("%s: manually modified (%s)", newpath, err.Error())
+		}
+
+		if len(hash) > 0 {
+			hash2, err := repo.GetHash(newpath, info, false)
+			if err != nil {
+				return fmt.Errorf("%s: cannot find hash (%s)", err.Error())
+			}
+
+			if !bytes.Equal(hash, hash2) {
+				return fmt.Errorf("%s: file already exists and was manually modified (hash %s != %s)", newpath, base58.Encode(hash), base58.Encode(hash2))
+			}
+		}
+	}
+
+	// Rename the doccommit file in a single atomic operation
+
+	err = os.Rename(f.Name(), newpath)
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+
+	// Set the XattrCommit
+
+	err = attrs.Set(newpath, XattrCommit, digest)
+	if err != nil {
+		return err
+	}
+
+	// Commit the file to its extended attributes
+
+	info, err = os.Stat(newpath)
+	if err != nil {
+		return err
+	}
+
+	_, err = repo.CommitFileHash(newpath, info, digest, false)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // hash is base58 encoded
