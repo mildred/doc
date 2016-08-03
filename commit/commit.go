@@ -24,27 +24,184 @@ type Entry struct {
 	Path string
 }
 
+// Takes a canonical path
+func findCommitFile(dir string) string {
+	for {
+		name := filepath.Join(dir, Doccommit)
+		_, err := os.Lstat(name)
+		if err == nil {
+			return name
+		}
+		dir = filepath.Dir(dir)
+		if dir == "/" || dir == "." {
+			return ""
+		}
+	}
+}
+
+func makeCanonical(dir string) (string, error) {
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	dir, err = filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func pathPrefix(basepath, subpath string) (string, error) {
+	prefix, err := filepath.Rel(basepath, subpath)
+	if err != nil {
+		return "", err
+	}
+	if prefix == "." {
+		prefix = ""
+	} else if prefix != "" {
+		prefix = prefix + "/"
+	}
+	return prefix, nil
+}
+
 func ReadDirByPath(dirPath string) (map[string]string, error) {
-	return readByPath(filepath.Join(dirPath, Doccommit))
+	dirPath, err := makeCanonical(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	cfile := findCommitFile(dirPath)
+	if cfile == "" {
+		return map[string]string{}, nil
+	}
+
+	prefix, err := pathPrefix(filepath.Dir(cfile), dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return readByPath(cfile, prefix, false)
 }
 
 func ReadDirByHash(dirPath string) (map[string][]string, error) {
-	return readByHash(filepath.Join(dirPath, Doccommit))
+	dirPath, err := makeCanonical(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	cfile := findCommitFile(dirPath)
+	if cfile == "" {
+		return map[string][]string{}, nil
+	}
+
+	prefix, err := pathPrefix(filepath.Dir(cfile), dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return readByHash(cfile, prefix, false)
 }
 
 func WriteDir(dirPath string, entries []Entry) error {
+	dirPath, err := makeCanonical(dirPath)
+	if err != nil {
+		return err
+	}
+
+	cfile := findCommitFile(dirPath)
+	if cfile == "" {
+		cfile = filepath.Join(dirPath, Doccommit)
+	}
+
+	prefix, err := pathPrefix(filepath.Dir(cfile), dirPath)
+	if err != nil {
+		return err
+	}
+
+	if prefix != "" {
+		newEntries := entries
+
+		// Read current entries
+		entries, err = readEntries(cfile, prefix, true)
+		if err != nil {
+			return err
+		}
+
+		// Prefix the new entries
+		for _, ent := range newEntries {
+			ent.Path = prefix + ent.Path
+			entries = append(entries, ent)
+		}
+	}
+
+	return writeDoccommitFile(cfile, entries)
+}
+
+func WriteDirAppend(dirPath string, entries []Entry) error {
+	dirPath, err := makeCanonical(dirPath)
+	if err != nil {
+		return err
+	}
+
+	cfile := findCommitFile(dirPath)
+	if cfile == "" {
+		cfile = filepath.Join(dirPath, Doccommit)
+	}
+
+	prefix, err := pathPrefix(filepath.Dir(cfile), dirPath)
+	if err != nil {
+		return err
+	}
+
+	newEntries := entries
+
+	// Read current entries
+	curEntries, err := readEntries(cfile, "", false)
+	if err != nil {
+		return err
+	}
+
+	// Only include current entries that are not new
+	entries = nil
+	for _, ent := range curEntries {
+		include := true
+		for _, e := range newEntries {
+			if e.Path == ent.Path {
+				include = false
+				break
+			}
+		}
+		if include {
+			fmt.Println("use entry %#v\n", ent)
+			entries = append(entries, ent)
+		} else {
+			fmt.Println("discard entry %#v\n", ent)
+		}
+	}
+
+	// Prefix the new entries
+	for _, ent := range newEntries {
+		ent.Path = prefix + ent.Path
+		entries = append(entries, ent)
+	}
+
+	return writeDoccommitFile(cfile, entries)
+}
+
+func writeDoccommitFile(newpath string, entries []Entry) error {
 	var data []byte
 
 	for _, e := range entries {
 		data = append(data, []byte(fmt.Sprintf("%s\t%s\n", base58.Encode(e.Hash), EncodePath(e.Path)))...)
 	}
 
-	digest, err := mh.Encode(sha1.New().Sum(data), mh.SHA1)
+	digestBin := sha1.Sum(data)
+	digest, err := mh.Encode(digestBin[:], mh.SHA1)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	f, err := ioutil.TempFile(dirPath, Doccommit)
+	f, err := ioutil.TempFile(filepath.Dir(newpath), filepath.Base(newpath))
 	if err != nil {
 		return err
 	}
@@ -56,9 +213,22 @@ func WriteDir(dirPath string, entries []Entry) error {
 		return err
 	}
 
-	// Check that the .doccommit file is clean (not manually modified)
+	if err := checkUntouchedDircommit(newpath); err != nil {
+		return err
+	}
 
-	newpath := filepath.Join(dirPath, Doccommit)
+	// Rename the doccommit file in a single atomic operation
+	err = os.Rename(f.Name(), newpath)
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+
+	return commitDircommit(newpath, digest)
+}
+
+// Check that the .doccommit file is clean (not manually modified)
+func checkUntouchedDircommit(newpath string) error {
 	info, err := os.Lstat(newpath)
 	if !os.IsNotExist(err) {
 		hash, err := attrs.Get(newpath, XattrCommit)
@@ -77,25 +247,20 @@ func WriteDir(dirPath string, entries []Entry) error {
 			}
 		}
 	}
+	return nil
+}
 
-	// Rename the doccommit file in a single atomic operation
-
-	err = os.Rename(f.Name(), newpath)
-	if err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-
+func commitDircommit(newpath string, digest []byte) error {
 	// Set the XattrCommit
 
-	err = attrs.Set(newpath, XattrCommit, digest)
+	err := attrs.Set(newpath, XattrCommit, digest)
 	if err != nil {
 		return err
 	}
 
 	// Commit the file to its extended attributes
 
-	info, err = os.Stat(newpath)
+	info, err := os.Stat(newpath)
 	if err != nil {
 		return err
 	}
@@ -108,8 +273,54 @@ func WriteDir(dirPath string, entries []Entry) error {
 	return nil
 }
 
+func Init(dir string) error {
+	newpath := filepath.Join(dir, Doccommit)
+
+	if err := checkUntouchedDircommit(newpath); err != nil {
+		return err
+	}
+
+	// Rename the doccommit file in a single atomic operation
+
+	f, err := os.OpenFile(newpath, os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return err
+	}
+	f.Close()
+
+	digestBin := sha1.Sum([]byte{})
+	digest, err := mh.Encode(digestBin[:], mh.SHA1)
+	if err != nil {
+		panic(err)
+	}
+
+	return commitDircommit(newpath, digest)
+}
+
+func readEntries(path, prefix string, reverse bool) ([]Entry, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var res []Entry
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		elems := strings.SplitN(line, "\t", 2)
+		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
+		if itempath != "" {
+			res = append(res, Entry{base58.Decode(elems[0]), itempath})
+		}
+	}
+
+	return res, scanner.Err()
+}
+
 // hash is base58 encoded
-func readByPath(path string) (map[string]string, error) {
+func readByPath(path, prefix string, reverse bool) (map[string]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -122,14 +333,17 @@ func readByPath(path string) (map[string]string, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		elems := strings.SplitN(line, "\t", 2)
-		res[DecodePath(elems[1])] = elems[0]
+		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
+		if itempath != "" {
+			res[itempath] = elems[0]
+		}
 	}
 
 	return res, scanner.Err()
 }
 
 // hash is base58 encoded
-func readByHash(path string) (map[string][]string, error) {
+func readByHash(path, prefix string, reverse bool) (map[string][]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -142,10 +356,24 @@ func readByHash(path string) (map[string][]string, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		elems := strings.SplitN(line, "\t", 2)
-		res[elems[0]] = append(res[elems[0]], DecodePath(elems[1]))
+		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
+		if itempath != "" {
+			res[elems[0]] = append(res[elems[0]], itempath)
+		}
 	}
 
 	return res, scanner.Err()
+}
+
+func FilterPrefix(path, prefix string, reverse bool) string {
+	hasPrefix := prefix == "" || strings.HasPrefix(path, prefix)
+	if !reverse && hasPrefix {
+		return path[len(prefix):]
+	} else if reverse && !hasPrefix {
+		return path
+	} else {
+		return ""
+	}
 }
 
 func DecodePath(path string) string {

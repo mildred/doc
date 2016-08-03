@@ -30,20 +30,30 @@ func mainCommit(args []string) int {
 	opt_force := f.Bool("f", false, "Force writing xattrs on read only files")
 	opt_nodoccommit := f.Bool("n", false, "Don't write .doccommit")
 	opt_nodocignore := f.Bool("no-docignore", false, "Don't respect .docignore")
+	opt_showerr := f.Bool("e", false, "Show individual errors")
 	f.Usage = func() {
 		fmt.Print(commitUsage)
 		f.PrintDefaults()
 	}
 	f.Parse(args)
-	dir := f.Arg(0)
-	if dir == "" {
-		dir = "."
-	}
 
+	if len(f.Args()) == 0 {
+		return runCommit(".", *opt_force, *opt_nodoccommit, *opt_nodocignore, *opt_showerr)
+	} else {
+		status := 0
+		for _, arg := range f.Args() {
+			status = status + runCommit(arg, *opt_force, *opt_nodoccommit, *opt_nodocignore, *opt_showerr)
+		}
+		return status
+	}
+}
+
+func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_showerr bool) int {
 	status := 0
+	numerr := 0
 
 	var commitEntries []commit.Entry
-	doCommit := !*opt_nodoccommit
+	doCommit := !opt_nodoccommit
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -59,7 +69,7 @@ func mainCommit(args []string) int {
 			return err
 		}
 
-		if !*opt_nodocignore && ignore.IsIgnored(path) {
+		if !opt_nodocignore && ignore.IsIgnored(path) {
 			return filepath.SkipDir
 		}
 
@@ -92,10 +102,13 @@ func mainCommit(args []string) int {
 				}
 			}
 		} else {
-			digest, err := commitFile(path, info, *opt_force)
+			digest, err := commitFile(path, info, opt_force)
 			if err != nil {
-				status = 1
-				fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+				numerr = numerr + 1
+				if opt_showerr {
+					status = 1
+					fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
+				}
 			} else if digest != nil {
 				fmt.Printf("%s %s\n", base58.Encode(digest), path)
 			}
@@ -112,8 +125,27 @@ func mainCommit(args []string) int {
 		status = 1
 	}
 
-	if doCommit {
-		err := commit.WriteDir(dir, commitEntries)
+	if numerr > 0 {
+		if dir == "." || dir == "" {
+			fmt.Fprintf(os.Stderr, "%d errors when writing extended attributes (probably read only files)\n", numerr)
+		} else {
+			fmt.Fprintf(os.Stderr, "%s: %d errors when writing extended attributes (probably read only files)\n", dir, numerr)
+		}
+	}
+
+	if doCommit && len(commitEntries) > 0 {
+		st, err := os.Lstat(dir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			return 1
+		}
+		if !st.IsDir() && len(commitEntries) == 1 {
+			commitEntries[0].Path = filepath.Base(dir)
+			dir = filepath.Dir(dir)
+			err = commit.WriteDirAppend(dir, commitEntries)
+		} else {
+			err = commit.WriteDir(dir, commitEntries)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			status = 1
