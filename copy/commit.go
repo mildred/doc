@@ -2,9 +2,12 @@ package copy
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/mildred/doc/commit"
+	"github.com/mildred/doc/repo"
 )
 
 func Copy(srcdir, dstdir string) (error, []error) {
@@ -53,33 +56,61 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit) ([]commit.Entry, e
 		}
 
 		// Already there, skip
-		di, hasd := dst.ByPath[s.Path]
-		if hasd && bytes.Equal(dst.Entries[di].Hash, s.Hash) {
+		di, conflict := dst.ByPath[s.Path]
+		if conflict && bytes.Equal(dst.Entries[di].Hash, s.Hash) {
 			continue
 		}
 
 		// Find destination file name
 		d := commit.Entry{
 			s.Hash,
-			"",
+			s.Path,
 		}
-		if hasd {
+		if conflict {
 			d.Path = commit.FindConflictFileName(s, dst)
+			if d.Path == "" {
+				continue
+			}
 		}
 
-		if d.Path == "" {
-			d.Path = s.Path
-		}
+		srcpath := filepath.Join(srcdir, s.Path)
+		dstpath := filepath.Join(dstdir, d.Path)
 
 		// Copy file
-		err, ers := CopyFileNoReplace(filepath.Join(srcdir, s.Path), filepath.Join(dstdir, d.Path))
+		err, ers := CopyFileNoReplace(srcpath, dstpath)
 		errs = append(errs, ers...)
 		if err != nil {
 			return success, err, errs
 		}
 
-		// FIXME: in case of conflicts, mark the file as a conflict
+		// In case of conflicts, mark the file as a conflict
+		if conflict {
+			// FIXME: mark conflicts for symlinks as well when the syscall is
+			// available
+			parentfile := filepath.Join(dstdir, s.Path)
 
+			dstpath_st, err := os.Lstat(dstpath)
+			if err == nil && dstpath_st.Mode()&os.ModeSymlink == 0 {
+				err = repo.MarkConflictFor(dstpath, filepath.Base(parentfile))
+				if err != nil {
+					errs = append(errs, fmt.Errorf("%s: could not mark conflict: %s", dstpath, err.Error()))
+				}
+			} else {
+				errs = append(errs, err)
+			}
+
+			parentfile_st, err := os.Lstat(parentfile)
+			if err == nil && parentfile_st.Mode()&os.ModeSymlink == 0 {
+				err = repo.AddConflictAlternative(parentfile, filepath.Base(dstpath))
+				if err != nil {
+					errs = append(errs, fmt.Errorf("%s: could add conflict alternative: %s", dstpath, err.Error()))
+				}
+			} else {
+				errs = append(errs, err)
+			}
+		}
+
+		// Add to commit file
 		err = c.Add(d)
 		if err != nil {
 			errs = append(errs, err)
