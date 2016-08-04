@@ -10,7 +10,11 @@ import (
 	"github.com/mildred/doc/repo"
 )
 
-func Copy(srcdir, dstdir string) (error, []error) {
+type Progress interface {
+	SetProgress(cur, max int, message string)
+}
+
+func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 	src, err := commit.ReadCommit(srcdir)
 	if err != nil {
 		return err, nil
@@ -19,20 +23,28 @@ func Copy(srcdir, dstdir string) (error, []error) {
 	if err != nil {
 		return err, nil
 	}
-	return copyCommits(srcdir, dstdir, src, dst)
+	return copyCommits(srcdir, dstdir, src, dst, p)
 }
 
-func copyCommits(srcdir, dstdir string, src, dst *commit.Commit) (error, []error) {
-	successes, err, errs := copyTree(srcdir, dstdir, src, dst)
+func copyCommits(srcdir, dstdir string, src, dst *commit.Commit, p Progress) (error, []error) {
+	successes, err, errs := copyTree(srcdir, dstdir, src, dst, p)
 	if err == nil {
 		return err, errs
 	}
 
+	if p != nil {
+		p.SetProgress(len(src.Entries), len(src.Entries)+1, "Commit destination")
+	}
+
 	err = commit.WriteDirAppend(dstdir, successes)
+
+	if p != nil {
+		p.SetProgress(len(src.Entries)+1, len(src.Entries)+1, "")
+	}
 	return err, errs
 }
 
-func copyTree(srcdir, dstdir string, src, dst *commit.Commit) ([]commit.Entry, error, []error) {
+func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]commit.Entry, error, []error) {
 	var errs []error
 	var success []commit.Entry
 	okdirs := map[string]bool{}
@@ -43,7 +55,10 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit) ([]commit.Entry, e
 	}
 	defer c.Close()
 
-	for _, s := range src.Entries {
+	for idx, s := range src.Entries {
+		if p != nil {
+			p.SetProgress(idx, len(src.Entries)+1, s.Path)
+		}
 
 		// Create parent dirs
 		for _, dir := range parentDirs(s.Path, okdirs) {
