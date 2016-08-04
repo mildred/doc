@@ -56,35 +56,41 @@ of its content along with the mtime of the file when the hashing was performed.
 It allows you to track file modifications and identity. It can also save PAR2
 redundency information about each file (in case they become corrupt).
 
-Query commands:
+Query commands on files:
 
-        check
-        info
-        status
-        missing
-        diff
+        check       Check files integrity with stored checksum
+        status      Show status compared to last commit
+        info        Show status with detailed informations
+
+Query commands on commit:
+
+        missing     List files missing from a repository compared to another
+        diff        Show two way differences between two repositories
 
 Repository commands:
 
-        init
-        commit
-        save
+        init        Initialize a repository (defines a root)
+        commit      Save current version of files
+        save        Save PAR2 redundency information
 
 Synchronisation commands:
 
-        cp
-        sync
-        pull
-        push
+        pull        Pull files from another repository that are missing
+        push        Push files that are missing in the other repository
+        cp          [OLD] scan and copy files one way
+        sync        [OLD] scan and copy files two ways
 
 Other commands:
 
+        help        Show help about commands
+        dupes       List files that are duplicates
+        unannex     Dereference git-annex symlinks
 `
 
 var described_commands []string = []string{
-	"check", "info", "status", "missing",
-	"init", "commit", "save",
-	"cp", "sync", "pull", "push",
+	"check", "info", "status", "missing", "diff",
+	"init", "commit", "save", "help",
+	"cp", "sync", "pull", "push", "unannex", "dupes",
 }
 
 const helpText2 string = `
