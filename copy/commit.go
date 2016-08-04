@@ -15,10 +15,19 @@ type Progress interface {
 }
 
 func Copy(srcdir, dstdir string, p Progress) (error, []error) {
+	if p != nil {
+		p.SetProgress(0, 3, "Read commit "+srcdir)
+	}
+
 	src, err := commit.ReadCommit(srcdir)
 	if err != nil {
 		return err, nil
 	}
+
+	if p != nil {
+		p.SetProgress(1, 3, "Read commit "+dstdir)
+	}
+
 	dst, err := commit.ReadCommit(dstdir)
 	if err != nil {
 		return err, nil
@@ -28,18 +37,19 @@ func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 
 func copyCommits(srcdir, dstdir string, src, dst *commit.Commit, p Progress) (error, []error) {
 	successes, err, errs := copyTree(srcdir, dstdir, src, dst, p)
-	if err == nil {
+	if err != nil {
 		return err, errs
 	}
 
 	if p != nil {
-		p.SetProgress(len(src.Entries), len(src.Entries)+1, "Commit destination")
+		p.SetProgress(len(successes)+2, len(successes)+3, "Commit destination")
 	}
 
 	err = commit.WriteDirAppend(dstdir, successes)
 
-	if p != nil {
-		p.SetProgress(len(src.Entries)+1, len(src.Entries)+1, "")
+	if p != nil && err == nil {
+		p.SetProgress(len(successes)+3, len(successes)+3,
+			fmt.Sprintf("%d files copied with %d errors", len(successes), len(errs)))
 	}
 	return err, errs
 }
@@ -55,21 +65,19 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 	}
 	defer c.Close()
 
-	for idx, s := range src.Entries {
-		if p != nil {
-			p.SetProgress(idx, len(src.Entries)+1, s.Path)
-		}
-
-		// Create parent dirs
-		for _, dir := range parentDirs(s.Path, okdirs) {
-			err, ers := MkdirFrom(filepath.Join(srcdir, dir), filepath.Join(dstdir, dir))
-			errs = append(errs, ers...)
-			if err != nil {
-				return success, err, errs
+	numfiles := len(src.Entries)
+	if p != nil {
+		numfiles = 0
+		for _, s := range src.Entries {
+			di, conflict := dst.ByPath[s.Path]
+			if !conflict || (!bytes.Equal(dst.Entries[di].Hash, s.Hash) &&
+				commit.FindConflictFileName(s, dst) != "") {
+				numfiles = numfiles + 1
 			}
-			okdirs[dir] = true
 		}
+	}
 
+	for _, s := range src.Entries {
 		// Already there, skip
 		di, conflict := dst.ByPath[s.Path]
 		if conflict && bytes.Equal(dst.Entries[di].Hash, s.Hash) {
@@ -90,6 +98,20 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 
 		srcpath := filepath.Join(srcdir, s.Path)
 		dstpath := filepath.Join(dstdir, d.Path)
+
+		if p != nil {
+			p.SetProgress(len(success)+2, numfiles+3, "Copy "+d.Path)
+		}
+
+		// Create parent dirs
+		for _, dir := range parentDirs(s.Path, okdirs) {
+			err, ers := MkdirFrom(filepath.Join(srcdir, dir), filepath.Join(dstdir, dir))
+			errs = append(errs, ers...)
+			if err != nil {
+				return success, err, errs
+			}
+			okdirs[dir] = true
+		}
 
 		// Copy file
 		err, ers := CopyFileNoReplace(srcpath, dstpath)

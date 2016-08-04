@@ -138,7 +138,7 @@ func OpenDir(dirPath string) (*CommitAppender, error) {
 		return nil, err
 	}
 
-	f, err := os.OpenFile(cfile, os.O_APPEND, 0666)
+	f, err := os.OpenFile(cfile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func WriteDirAppend(dirPath string, entries []Entry) error {
 
 	// Read current entries
 	curEntries, err := readEntries(cfile, "", false)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -232,10 +232,7 @@ func WriteDirAppend(dirPath string, entries []Entry) error {
 			}
 		}
 		if include {
-			fmt.Println("use entry %#v\n", ent)
 			entries = append(entries, ent)
-		} else {
-			fmt.Println("discard entry %#v\n", ent)
 		}
 	}
 
