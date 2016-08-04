@@ -50,3 +50,33 @@ func MkdirFrom(src, dst string) (error, []error) {
 
 	return nil, errs
 }
+
+func makeParentDirs(srcdir, dstdir, path string, okdirs map[string]bool) (error, []error) {
+	var errs []error
+	for _, dir := range parentDirs(path, okdirs) {
+		err, ers := MkdirFrom(filepath.Join(srcdir, dir), filepath.Join(dstdir, dir))
+		errs = append(errs, ers...)
+		if err != nil {
+			return err, errs
+		}
+		okdirs[dir] = true
+	}
+	return nil, errs
+}
+
+func parentDirs(path string, ok map[string]bool) []string {
+	var res []string
+	var breadcrumb []string
+
+	d := filepath.Dir(path)
+	for !ok[d] && d != "." && d != "/" {
+		breadcrumb = append(breadcrumb, d)
+		d = filepath.Dir(d)
+	}
+
+	// reverse
+	for i := len(breadcrumb) - 1; i >= 0; i-- {
+		res = append(res, breadcrumb[i])
+	}
+	return res
+}

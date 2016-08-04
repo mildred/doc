@@ -3,7 +3,6 @@ package copy
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/mildred/doc/commit"
@@ -32,10 +31,7 @@ func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 	if err != nil {
 		return err, nil
 	}
-	return copyCommits(srcdir, dstdir, src, dst, p)
-}
 
-func copyCommits(srcdir, dstdir string, src, dst *commit.Commit, p Progress) (error, []error) {
 	successes, err, errs := copyTree(srcdir, dstdir, src, dst, p)
 	if err != nil {
 		return err, errs
@@ -104,17 +100,14 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 		}
 
 		// Create parent dirs
-		for _, dir := range parentDirs(s.Path, okdirs) {
-			err, ers := MkdirFrom(filepath.Join(srcdir, dir), filepath.Join(dstdir, dir))
-			errs = append(errs, ers...)
-			if err != nil {
-				return success, err, errs
-			}
-			okdirs[dir] = true
+		err, ers := makeParentDirs(srcdir, dstdir, s.Path, okdirs)
+		errs = append(errs, ers...)
+		if err != nil {
+			return success, err, errs
 		}
 
 		// Copy file
-		err, ers := CopyFileNoReplace(srcpath, dstpath)
+		err, ers = CopyFileNoReplace(srcpath, dstpath)
 		errs = append(errs, ers...)
 		if err != nil {
 			return success, err, errs
@@ -122,29 +115,7 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 
 		// In case of conflicts, mark the file as a conflict
 		if conflict {
-			// FIXME: mark conflicts for symlinks as well when the syscall is
-			// available
-			parentfile := filepath.Join(dstdir, s.Path)
-
-			dstpath_st, err := os.Lstat(dstpath)
-			if err == nil && dstpath_st.Mode()&os.ModeSymlink == 0 {
-				err = repo.MarkConflictFor(dstpath, filepath.Base(parentfile))
-				if err != nil {
-					errs = append(errs, fmt.Errorf("%s: could not mark conflict: %s", dstpath, err.Error()))
-				}
-			} else {
-				errs = append(errs, err)
-			}
-
-			parentfile_st, err := os.Lstat(parentfile)
-			if err == nil && parentfile_st.Mode()&os.ModeSymlink == 0 {
-				err = repo.AddConflictAlternative(parentfile, filepath.Base(dstpath))
-				if err != nil {
-					errs = append(errs, fmt.Errorf("%s: could add conflict alternative: %s", dstpath, err.Error()))
-				}
-			} else {
-				errs = append(errs, err)
-			}
+			errs = append(errs, repo.MarkConflict(filepath.Join(dstdir, s.Path), dstpath)...)
 		}
 
 		// Add to commit file
@@ -156,21 +127,4 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 		success = append(success, d)
 	}
 	return success, nil, errs
-}
-
-func parentDirs(path string, ok map[string]bool) []string {
-	var res []string
-	var breadcrumb []string
-
-	d := filepath.Dir(path)
-	for !ok[d] && d != "." && d != "/" {
-		breadcrumb = append(breadcrumb, d)
-		d = filepath.Dir(d)
-	}
-
-	// reverse
-	for i := len(breadcrumb) - 1; i >= 0; i-- {
-		res = append(res, breadcrumb[i])
-	}
-	return res
 }

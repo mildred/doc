@@ -11,6 +11,33 @@ import (
 	attrs "github.com/mildred/doc/attrs"
 )
 
+func MarkConflict(parentfile, dstpath string) []error {
+	var errs []error
+	// FIXME: mark conflicts for symlinks as well when the syscall is
+	// available
+
+	dstpath_st, err := os.Lstat(dstpath)
+	if err == nil && dstpath_st.Mode()&os.ModeSymlink == 0 {
+		err = MarkConflictFor(dstpath, filepath.Base(parentfile))
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: could not mark conflict: %s", dstpath, err.Error()))
+		}
+	} else {
+		errs = append(errs, err)
+	}
+
+	parentfile_st, err := os.Lstat(parentfile)
+	if err == nil && parentfile_st.Mode()&os.ModeSymlink == 0 {
+		err = AddConflictAlternative(parentfile, filepath.Base(dstpath))
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: could add conflict alternative: %s", dstpath, err.Error()))
+		}
+	} else {
+		errs = append(errs, err)
+	}
+	return errs
+}
+
 func ConflictFile(path string) string {
 	conflict, err := attrs.Get(path, XattrConflict)
 	if err != nil {
