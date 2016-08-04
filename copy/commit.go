@@ -158,35 +158,6 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 	return success, nil, errs
 }
 
-func copyEntries(src, dst string, entries []commit.Entry) ([]commit.Entry, error, []error) {
-	var errs []error
-	var success []commit.Entry
-	okdirs := map[string]bool{}
-
-	for _, e := range entries {
-		// Create parent dirs
-		for _, dir := range parentDirs(e.Path, okdirs) {
-			err, ers := MkdirFrom(filepath.Join(src, dir), filepath.Join(dst, dir))
-			errs = append(errs, ers...)
-			if err != nil {
-				return success, err, errs
-			}
-			okdirs[dir] = true
-		}
-
-		// Copy file
-		err, ers := CopyFileNoReplace(filepath.Join(src, e.Path), filepath.Join(dst, e.Path))
-		errs = append(errs, ers...)
-		if err != nil {
-			return success, err, errs
-		}
-
-		success = append(success, e)
-	}
-
-	return success, nil, errs
-}
-
 func parentDirs(path string, ok map[string]bool) []string {
 	var res []string
 	var breadcrumb []string

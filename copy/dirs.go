@@ -2,7 +2,6 @@ package copy
 
 import (
 	"os"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -50,29 +49,4 @@ func MkdirFrom(src, dst string) (error, []error) {
 	}
 
 	return nil, errs
-}
-
-// Create all directrories in dir in dst, using information found from
-// directories of the same name in src. The parent directories are assumed to
-// exist in dst, if the directories are created in order.
-// If a file can be found on dst having the same name, no creation attempt is
-// made.
-// First errors is fatal, other errors are issues replicating attributes
-func Makedirs(dirs []string, src, dst string) (error, []error) {
-	var errs_warn []error
-	for _, dir := range dirs {
-		s := filepath.Join(src, dir)
-		d := filepath.Join(dst, dir)
-		// Check it doesn't exist on dst
-		if _, e := os.Lstat(d); e == nil {
-			continue
-		}
-		// Make from src to dst
-		err, erw := MkdirFrom(s, d)
-		errs_warn = append(errs_warn, erw...)
-		if err != nil {
-			return err, errs_warn
-		}
-	}
-	return nil, errs_warn
 }

@@ -40,22 +40,6 @@ func CopyFileNoReplace(src, dst string) (error, []error) {
 	return err, errs
 }
 
-func CopyFile(src, dst string) (error, []error) {
-	fname, err, errs := CopyFileTemp(src, dst)
-	if err != nil {
-		return err, errs
-	}
-
-	err = os.Rename(fname, dst)
-	if err != nil {
-		if e := os.Remove(fname); e != nil {
-			errs = append(errs, e)
-		}
-	}
-
-	return err, errs
-}
-
 func CopyFileTemp(src, dst string) (string, error, []error) {
 	var errs []error
 
