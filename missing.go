@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-	commit "github.com/mildred/doc/commit"
 	"os"
+
+	commit "github.com/mildred/doc/commit"
 )
 
 const usageMissing string = `doc missing [OPTIONS...] [SRC] DEST
@@ -34,22 +36,25 @@ func mainMissing(args []string) int {
 	f.Parse(args)
 	src, dst := findSourceDest(*opt_from, *opt_to, f.Args())
 
-	srcfiles, err := commit.ReadDirByPath(src)
+	srcfiles, err := commit.ReadCommit(src)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %s", src, err.Error())
 	}
 
-	dstfiles, err := commit.ReadDirByPath(dst)
+	dstfiles, err := commit.ReadCommit(dst)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %s", dst, err.Error())
 	}
 
-	for file, shash := range srcfiles {
-		dhash := dstfiles[file]
-		if shash != dhash {
-			fmt.Printf("- %s\t%s\n", shash, commit.EncodePath(file))
-			if dhash != "" {
-				fmt.Printf("+ %s\t%s\n", shash, commit.EncodePath(file))
+	for _, s := range srcfiles.Entries {
+		did, hasd := dstfiles.ByPath[s.Path]
+		if !hasd {
+			fmt.Printf("- %s\t%s\n", s.HashText(), commit.EncodePath(s.Path))
+		} else {
+			d := dstfiles.Entries[did]
+			if !bytes.Equal(s.Hash, d.Hash) {
+				fmt.Printf("- %s\t%s\n", s.HashText(), commit.EncodePath(s.Path))
+				fmt.Printf("+ %s\t%s\n", d.HashText(), commit.EncodePath(d.Path))
 			}
 		}
 	}

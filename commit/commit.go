@@ -74,25 +74,6 @@ func pathPrefix(basepath, subpath string) (string, error) {
 	return prefix, nil
 }
 
-func ReadDirByPath(dirPath string) (map[string]string, error) {
-	dirPath, err := makeCanonical(dirPath)
-	if err != nil {
-		return nil, err
-	}
-
-	cfile := findCommitFile(dirPath)
-	if cfile == "" {
-		return map[string]string{}, nil
-	}
-
-	prefix, err := pathPrefix(filepath.Dir(cfile), dirPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return readByPath(cfile, prefix, false)
-}
-
 func ReadCommit(dirPath string) (*Commit, error) {
 	dirPath, err := makeCanonical(dirPath)
 	if err != nil {
@@ -408,52 +389,6 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
 	}
 
 	return &c, scanner.Err()
-}
-
-// hash is base58 encoded
-func readByPath(path, prefix string, reverse bool) (map[string]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	res := map[string]string{}
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		elems := strings.SplitN(line, "\t", 2)
-		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
-		if itempath != "" {
-			res[itempath] = elems[0]
-		}
-	}
-
-	return res, scanner.Err()
-}
-
-// hash is base58 encoded
-func readByHash(path, prefix string, reverse bool) (map[string][]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	res := map[string][]string{}
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		elems := strings.SplitN(line, "\t", 2)
-		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
-		if itempath != "" {
-			res[elems[0]] = append(res[elems[0]], itempath)
-		}
-	}
-
-	return res, scanner.Err()
 }
 
 func FilterPrefix(path, prefix string, reverse bool) string {
