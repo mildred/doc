@@ -2,6 +2,7 @@ package copy
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
