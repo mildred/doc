@@ -87,7 +87,11 @@ func FindDirStore(path string) string {
 
 	_, err = os.Lstat(res)
 	if err != nil {
-		return FindDirStore(filepath.Join(path, ".."))
+		newpath, err := filepath.Abs(filepath.Join(path, ".."))
+		if err != nil || newpath == path {
+			return ""
+		}
+		return FindDirStore(newpath)
 	}
 
 	return res

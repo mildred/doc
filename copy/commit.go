@@ -3,6 +3,7 @@ package copy
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/mildred/doc/commit"
@@ -27,6 +28,8 @@ func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 		p.SetProgress(1, 3, "Read commit "+dstdir)
 	}
 
+	os.MkdirAll(dstdir, 0777)
+
 	dst, err := commit.ReadCommit(dstdir)
 	if err != nil {
 		return err, nil
@@ -38,7 +41,7 @@ func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 	}
 
 	if p != nil {
-		p.SetProgress(len(successes)+2, len(successes)+3, "Commit destination")
+		p.SetProgress(len(successes)+2, len(successes)+3, fmt.Sprintf("Commit %d new files to %#v", len(successes), dstdir))
 	}
 
 	err = commit.WriteDirAppend(dstdir, successes)

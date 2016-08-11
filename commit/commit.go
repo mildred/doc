@@ -2,7 +2,6 @@ package commit
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/sha1"
 	"fmt"
 	"io/ioutil"
@@ -50,15 +49,15 @@ func findCommitFile(dir string) string {
 }
 
 func makeCanonical(dir string) (string, error) {
-	dir, err := filepath.Abs(dir)
+	dir2, err := filepath.Abs(dir)
 	if err != nil {
-		return "", err
+		return dir, err
 	}
-	dir, err = filepath.EvalSymlinks(dir)
+	dir3, err := filepath.EvalSymlinks(dir2)
 	if err != nil {
-		return "", err
+		return dir2, err
 	}
-	return dir, nil
+	return dir3, nil
 }
 
 func pathPrefix(basepath, subpath string) (string, error) {
@@ -76,7 +75,7 @@ func pathPrefix(basepath, subpath string) (string, error) {
 
 func ReadCommit(dirPath string) (*Commit, error) {
 	dirPath, err := makeCanonical(dirPath)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 
@@ -95,6 +94,40 @@ func ReadCommit(dirPath string) (*Commit, error) {
 	}
 
 	return readCommitFile(cfile, prefix, false)
+}
+
+func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
+	c := Commit{
+		nil,
+		map[string][]int{},
+		map[string]int{},
+	}
+
+	f, err := os.Open(path)
+	if err != nil && os.IsNotExist(err) {
+		fmt.Printf("Hello %#v\n\n\n", err)
+		return &c, nil
+	} else if err != nil {
+		fmt.Printf("Error %#v\n\n\n", err)
+		return nil, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	idx := 0
+	for scanner.Scan() {
+		line := scanner.Text()
+		elems := strings.SplitN(line, "\t", 2)
+		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
+		if itempath != "" {
+			c.Entries = append(c.Entries, Entry{base58.Decode(elems[0]), itempath})
+			c.ByPath[itempath] = idx
+			c.ByHash[elems[0]] = append(c.ByHash[elems[0]], idx)
+			idx = idx + 1
+		}
+	}
+
+	return &c, scanner.Err()
 }
 
 type CommitAppender struct {
@@ -255,10 +288,6 @@ func writeDoccommitFile(newpath string, entries []Entry) error {
 		return err
 	}
 
-	if err := checkUntouchedDircommit(newpath); err != nil {
-		return err
-	}
-
 	// Rename the doccommit file in a single atomic operation
 	err = os.Rename(f.Name(), newpath)
 	if err != nil {
@@ -267,29 +296,6 @@ func writeDoccommitFile(newpath string, entries []Entry) error {
 	}
 
 	return commitDircommit(newpath, digest)
-}
-
-// Check that the .doccommit file is clean (not manually modified)
-func checkUntouchedDircommit(newpath string) error {
-	info, err := os.Lstat(newpath)
-	if !os.IsNotExist(err) {
-		hash, err := attrs.Get(newpath, XattrCommit)
-		if err != nil {
-			return fmt.Errorf("%s: manually modified (%s)", newpath, err.Error())
-		}
-
-		if len(hash) > 0 {
-			hash2, err := repo.GetHash(newpath, info, false)
-			if err != nil {
-				return fmt.Errorf("%s: cannot find hash (%s)", err.Error())
-			}
-
-			if !bytes.Equal(hash, hash2) {
-				return fmt.Errorf("%s: file already exists and was manually modified (hash %s != %s)", newpath, base58.Encode(hash), base58.Encode(hash2))
-			}
-		}
-	}
-	return nil
 }
 
 func commitDircommit(newpath string, digest []byte) error {
@@ -317,10 +323,6 @@ func commitDircommit(newpath string, digest []byte) error {
 
 func Init(dir string) error {
 	newpath := filepath.Join(dir, Doccommit)
-
-	if err := checkUntouchedDircommit(newpath); err != nil {
-		return err
-	}
 
 	// Rename the doccommit file in a single atomic operation
 
@@ -359,36 +361,6 @@ func readEntries(path, prefix string, reverse bool) ([]Entry, error) {
 	}
 
 	return res, scanner.Err()
-}
-
-func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
-	c := Commit{
-		nil,
-		map[string][]int{},
-		map[string]int{},
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	idx := 0
-	for scanner.Scan() {
-		line := scanner.Text()
-		elems := strings.SplitN(line, "\t", 2)
-		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
-		if itempath != "" {
-			c.Entries = append(c.Entries, Entry{base58.Decode(elems[0]), itempath})
-			c.ByPath[itempath] = idx
-			c.ByHash[elems[0]] = append(c.ByHash[elems[0]], idx)
-			idx = idx + 1
-		}
-	}
-
-	return &c, scanner.Err()
 }
 
 func FilterPrefix(path, prefix string, reverse bool) string {

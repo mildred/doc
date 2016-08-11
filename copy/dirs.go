@@ -20,7 +20,7 @@ func MkdirFrom(src, dst string) (error, []error) {
 	}
 
 	err = os.Mkdir(dst, src_st.Mode())
-	if err != nil {
+	if err != nil && !os.IsExist(err) {
 		return err, nil
 	}
 
