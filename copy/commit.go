@@ -83,6 +83,16 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 			continue
 		}
 
+		is_private := src.GetAttr(s.Path, "private") == "1"
+		if is_private {
+			continue
+		}
+
+		is_wanted := dst.GetAttr(s.Path, "wanted") != "0"
+		if !is_wanted {
+			continue
+		}
+
 		// Find destination file name
 		d := commit.Entry{
 			s.Hash,

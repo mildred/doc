@@ -35,8 +35,8 @@ func ReadAttrFile(path string) (items []DocAttrItem, err error) {
 				}
 				items[len(items)-1].Attrs[key] = val
 			}
-		} else {
-			items = append(items, DocAttrItem{line, map[string]string{}})
+		} else if strings.HasPrefix(line, "/") {
+			items = append(items, DocAttrItem{line[1:], map[string]string{}})
 		}
 	}
 	err = scanner.Err()
@@ -81,6 +81,9 @@ func ReadTree(rootDir, prefix string, files []string) (attrs map[string]map[stri
 				continue
 			}
 			name = name[len(prefix):]
+			if name == "" {
+				name = "/"
+			}
 			m := attrs[name]
 			if m == nil {
 				m = map[string]string{}

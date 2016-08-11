@@ -35,6 +35,24 @@ type Commit struct {
 	Attrs   map[string]map[string]string
 }
 
+func (c *Commit) GetAttr(file, name string) string {
+	for file != "./" {
+		attrs, ok := c.Attrs[file]
+		if ok {
+			attr, ok := attrs[name]
+			if ok {
+				return attr
+			}
+		}
+		file = filepath.Dir(file) + "/"
+	}
+	attrs, ok := c.Attrs["/"]
+	if ok {
+		return attrs[name]
+	}
+	return ""
+}
+
 // Takes a canonical path
 func findCommitFile(dir string) string {
 	for {
@@ -96,21 +114,17 @@ func ReadCommit(dirPath string) (*Commit, error) {
 		return nil, err
 	}
 
-	c, err := readCommitFile(cfile, prefix, false)
+	c, files, err := readCommitFile(cfile, prefix, false)
 	if err != nil {
 		return nil, err
-	}
-
-	var files []string
-	for _, ent := range c.Entries {
-		files = append(files, ent.Path)
 	}
 
 	c.Attrs, err = docattr.ReadTree(filepath.Dir(cfile), prefix, files)
 	return c, err
 }
 
-func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
+func readCommitFile(path, prefix string, reverse bool) (*Commit, []string, error) {
+	var files []string
 	c := Commit{
 		nil,
 		map[string][]int{},
@@ -120,9 +134,9 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
 
 	f, err := os.Open(path)
 	if err != nil && os.IsNotExist(err) {
-		return &c, nil
+		return &c, nil, nil
 	} else if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer f.Close()
 
@@ -131,7 +145,9 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		elems := strings.SplitN(line, "\t", 2)
-		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
+		f := DecodePath(elems[1])
+		files = append(files, f)
+		itempath := FilterPrefix(f, prefix, reverse)
 		if itempath != "" {
 			c.Entries = append(c.Entries, Entry{base58.Decode(elems[0]), itempath})
 			c.ByPath[itempath] = idx
@@ -140,7 +156,7 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
 		}
 	}
 
-	return &c, scanner.Err()
+	return &c, files, scanner.Err()
 }
 
 type CommitAppender struct {
