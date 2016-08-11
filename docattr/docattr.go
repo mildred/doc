@@ -51,7 +51,6 @@ func (a bySize) Less(i, j int) bool { return len(a[i]) < len(a[j]) }
 
 func ReadTree(rootDir, prefix string, files []string) (attrs map[string]map[string]string, err error) {
 	var filenames []string
-	attrFiles := map[string][]DocAttrItem{}
 	attrs = map[string]map[string]string{}
 
 	for _, fname := range files {
@@ -63,24 +62,32 @@ func ReadTree(rootDir, prefix string, files []string) (attrs map[string]map[stri
 			continue
 		}
 		filenames = append(filenames, fname)
-		attrFiles[fname], err = ReadAttrFile(filepath.Join(rootDir, fname))
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	sort.Sort(bySize(filenames))
 	for _, fname := range filenames {
 		dir := filepath.Dir(fname)
-		for _, itm := range attrFiles[fname] {
+		items, err := ReadAttrFile(filepath.Join(rootDir, fname))
+		if err != nil {
+			return nil, err
+		}
+		for _, itm := range items {
 			name := filepath.Join(dir, itm.Name)
+			recurse := false
 			if strings.HasSuffix(itm.Name, "/") {
 				name = name + "/"
+				recurse = true
 			}
-			if !strings.HasPrefix(name, prefix) {
+			if !recurse && !strings.HasPrefix(name, prefix) {
 				continue
 			}
-			name = name[len(prefix):]
+			if len(name) < len(prefix) && recurse && strings.HasPrefix(prefix, name) {
+				name = ""
+			} else if len(prefix) <= len(name) && strings.HasPrefix(name, prefix) {
+				name = name[len(prefix):]
+			} else {
+				continue
+			}
 			if name == "" {
 				name = "/"
 			}

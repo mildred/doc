@@ -36,15 +36,17 @@ type Commit struct {
 }
 
 func (c *Commit) GetAttr(file, name string) string {
-	for file != "./" {
-		attrs, ok := c.Attrs[file]
+	oldfile := ""
+	for file != oldfile {
+		attrs, ok := c.Attrs[file+"/"]
 		if ok {
 			attr, ok := attrs[name]
 			if ok {
 				return attr
 			}
 		}
-		file = filepath.Dir(file) + "/"
+		oldfile = file
+		file = filepath.Dir(file)
 	}
 	attrs, ok := c.Attrs["/"]
 	if ok {

@@ -16,7 +16,7 @@ type Progress interface {
 
 func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 	if p != nil {
-		p.SetProgress(0, 3, "Read commit "+srcdir)
+		p.SetProgress(0, 4, "Read commit "+srcdir)
 	}
 
 	src, err := commit.ReadCommit(srcdir)
@@ -25,7 +25,7 @@ func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 	}
 
 	if p != nil {
-		p.SetProgress(1, 3, "Read commit "+dstdir)
+		p.SetProgress(1, 4, "Read commit "+dstdir)
 	}
 
 	os.MkdirAll(dstdir, 0777)
@@ -35,22 +35,48 @@ func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 		return err, nil
 	}
 
+	if p != nil {
+		p.SetProgress(2, 4, "Prepare copy")
+	}
+
 	successes, err, errs := copyTree(srcdir, dstdir, src, dst, p)
 	if err != nil {
 		return err, errs
 	}
 
 	if p != nil {
-		p.SetProgress(len(successes)+2, len(successes)+3, fmt.Sprintf("Commit %d new files to %#v", len(successes), dstdir))
+		p.SetProgress(len(successes)+3, len(successes)+4, fmt.Sprintf("Commit %d new files to %#v", len(successes), dstdir))
 	}
 
 	err = commit.WriteDirAppend(dstdir, successes)
 
 	if p != nil && err == nil {
-		p.SetProgress(len(successes)+3, len(successes)+3,
+		p.SetProgress(len(successes)+4, len(successes)+4,
 			fmt.Sprintf("%d files copied with %d errors", len(successes), len(errs)))
 	}
 	return err, errs
+}
+
+func canCopy(s commit.Entry, src, dst *commit.Commit) bool {
+	// Already there, skip
+	di, conflict := dst.ByPath[s.Path]
+	if conflict && bytes.Equal(dst.Entries[di].Hash, s.Hash) {
+		return false
+	}
+
+	// Source is private, skip
+	is_private := src.GetAttr(s.Path, "private") == "1"
+	if is_private {
+		return false
+	}
+
+	// Destination is unwanted, skip
+	is_wanted := dst.GetAttr(s.Path, "wanted") != "0"
+	if !is_wanted {
+		return false
+	}
+
+	return true
 }
 
 func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]commit.Entry, error, []error) {
@@ -58,38 +84,37 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 	var success []commit.Entry
 	okdirs := map[string]bool{}
 
+	if p != nil {
+		p.SetProgress(2, 4, "Prepare copy: open "+dstdir)
+	}
+
 	c, err := commit.OpenDir(dstdir)
 	if err != nil {
 		return success, err, errs
 	}
 	defer c.Close()
 
+	if p != nil {
+		p.SetProgress(2, 4, "Prepare copy: compute how many files to copy")
+	}
+
 	numfiles := len(src.Entries)
 	if p != nil {
 		numfiles = 0
 		for _, s := range src.Entries {
-			di, conflict := dst.ByPath[s.Path]
-			if !conflict || (!bytes.Equal(dst.Entries[di].Hash, s.Hash) &&
-				commit.FindConflictFileName(s, dst) != "") {
+			if canCopy(s, src, dst) {
 				numfiles = numfiles + 1
 			}
 		}
 	}
 
+	if p != nil {
+		p.SetProgress(2, numfiles+4, fmt.Sprintf("Prepare copy: starting copy for %d files...", numfiles))
+	}
+
 	for _, s := range src.Entries {
-		// Already there, skip
-		di, conflict := dst.ByPath[s.Path]
-		if conflict && bytes.Equal(dst.Entries[di].Hash, s.Hash) {
-			continue
-		}
-
-		is_private := src.GetAttr(s.Path, "private") == "1"
-		if is_private {
-			continue
-		}
-
-		is_wanted := dst.GetAttr(s.Path, "wanted") != "0"
-		if !is_wanted {
+		// Cannot copy, skip
+		if !canCopy(s, src, dst) {
 			continue
 		}
 
@@ -98,6 +123,7 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 			s.Hash,
 			s.Path,
 		}
+		_, conflict := dst.ByPath[s.Path]
 		if conflict {
 			d.Path = commit.FindConflictFileName(s, dst)
 			if d.Path == "" {
@@ -109,7 +135,7 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 		dstpath := filepath.Join(dstdir, d.Path)
 
 		if p != nil {
-			p.SetProgress(len(success)+2, numfiles+3, "Copy "+d.Path)
+			p.SetProgress(len(success)+3, numfiles+4, "Copy "+d.Path)
 		}
 
 		// Create parent dirs
