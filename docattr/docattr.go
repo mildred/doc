@@ -74,15 +74,17 @@ func ReadTree(rootDir, prefix string, files []string) (attrs map[string]map[stri
 		for _, itm := range items {
 			name := filepath.Join(dir, itm.Name)
 			recurse := false
-			if strings.HasSuffix(itm.Name, "/") {
+			if strings.HasSuffix(itm.Name, "/") || itm.Name == "" {
 				name = name + "/"
 				recurse = true
 			}
 			if !recurse && !strings.HasPrefix(name, prefix) {
 				continue
 			}
-			if len(name) < len(prefix) && recurse && strings.HasPrefix(prefix, name) {
-				name = ""
+			if name == "./" {
+				name = "/"
+			} else if len(name) < len(prefix) && recurse && strings.HasPrefix(prefix, name) {
+				name = "/"
 			} else if len(prefix) <= len(name) && strings.HasPrefix(name, prefix) {
 				name = name[len(prefix):]
 			} else {
