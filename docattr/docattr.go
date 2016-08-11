@@ -23,6 +23,7 @@ func ReadAttrFile(path string) (items []DocAttrItem, err error) {
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
+	last := 0
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
@@ -33,9 +34,16 @@ func ReadAttrFile(path string) (items []DocAttrItem, err error) {
 				if len(elems) > 1 {
 					val = elems[1]
 				}
-				items[len(items)-1].Attrs[key] = val
+				for i := 1; i <= last; i++ {
+					items[len(items)-i].Attrs[key] = val
+				}
 			}
 		} else if strings.HasPrefix(line, "/") {
+			if len(items) > 0 && len(items[len(items)-1].Attrs) == 0 {
+				last++
+			} else {
+				last = 1
+			}
 			items = append(items, DocAttrItem{line[1:], map[string]string{}})
 		}
 	}

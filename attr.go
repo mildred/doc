@@ -21,7 +21,9 @@ and below. The syntax is:
     | /FILENAME
     |     attr=value
     |     attr=value
+    |
     | /FILENAME
+    | /DIRNAME/
     |     attr=value
     | ...
 
