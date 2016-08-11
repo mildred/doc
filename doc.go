@@ -26,6 +26,7 @@ func init() {
 		"missing": mainMissing,
 		"unannex": mainUnannex,
 		"diff":    mainDiff,
+		"attr":    mainAttr,
 	}
 }
 
@@ -66,6 +67,7 @@ Query commands on commit:
 
         missing     List files missing from a repository compared to another
         diff        Show two way differences between two repositories
+        attr        Show attributes
 
 Repository commands:
 
@@ -88,7 +90,7 @@ Other commands:
 `
 
 var described_commands []string = []string{
-	"check", "info", "status", "missing", "diff",
+	"check", "info", "status", "missing", "diff", "attr",
 	"init", "commit", "save", "help",
 	"cp", "sync", "pull", "push", "unannex", "dupes",
 }

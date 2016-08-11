@@ -96,6 +96,31 @@ func ReadCommit(dirPath string) (*Commit, error) {
 	return readCommitFile(cfile, prefix, false)
 }
 
+func ReadRootCommit(dirPath string) (rootDir, prefix string, c *Commit, err error) {
+	dirPath, err = makeCanonical(dirPath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", "", nil, err
+	}
+
+	cfile := findCommitFile(dirPath)
+	if cfile == "" {
+		return dirPath, "", &Commit{
+			[]Entry{},
+			map[string][]int{},
+			map[string]int{},
+		}, nil
+	}
+
+	rootDir = filepath.Dir(cfile)
+	prefix, err = pathPrefix(filepath.Dir(cfile), dirPath)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	c, err = readCommitFile(cfile, "", false)
+	return
+}
+
 func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
 	c := Commit{
 		nil,
@@ -105,10 +130,8 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
 
 	f, err := os.Open(path)
 	if err != nil && os.IsNotExist(err) {
-		fmt.Printf("Hello %#v\n\n\n", err)
 		return &c, nil
 	} else if err != nil {
-		fmt.Printf("Error %#v\n\n\n", err)
 		return nil, err
 	}
 	defer f.Close()
