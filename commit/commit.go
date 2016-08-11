@@ -12,6 +12,7 @@ import (
 	base58 "github.com/jbenet/go-base58"
 	mh "github.com/jbenet/go-multihash"
 	attrs "github.com/mildred/doc/attrs"
+	docattr "github.com/mildred/doc/docattr"
 	repo "github.com/mildred/doc/repo"
 )
 
@@ -31,6 +32,7 @@ type Commit struct {
 	Entries []Entry
 	ByHash  map[string][]int
 	ByPath  map[string]int
+	Attrs   map[string]map[string]string
 }
 
 // Takes a canonical path
@@ -67,7 +69,7 @@ func pathPrefix(basepath, subpath string) (string, error) {
 	}
 	if prefix == "." {
 		prefix = ""
-	} else if prefix != "" {
+	} else if prefix != "" && !strings.HasSuffix(prefix, "/") {
 		prefix = prefix + "/"
 	}
 	return prefix, nil
@@ -85,6 +87,7 @@ func ReadCommit(dirPath string) (*Commit, error) {
 			[]Entry{},
 			map[string][]int{},
 			map[string]int{},
+			map[string]map[string]string{},
 		}, nil
 	}
 
@@ -93,32 +96,18 @@ func ReadCommit(dirPath string) (*Commit, error) {
 		return nil, err
 	}
 
-	return readCommitFile(cfile, prefix, false)
-}
-
-func ReadRootCommit(dirPath string) (rootDir, prefix string, c *Commit, err error) {
-	dirPath, err = makeCanonical(dirPath)
-	if err != nil && !os.IsNotExist(err) {
-		return "", "", nil, err
-	}
-
-	cfile := findCommitFile(dirPath)
-	if cfile == "" {
-		return dirPath, "", &Commit{
-			[]Entry{},
-			map[string][]int{},
-			map[string]int{},
-		}, nil
-	}
-
-	rootDir = filepath.Dir(cfile)
-	prefix, err = pathPrefix(filepath.Dir(cfile), dirPath)
+	c, err := readCommitFile(cfile, prefix, false)
 	if err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 
-	c, err = readCommitFile(cfile, "", false)
-	return
+	var files []string
+	for _, ent := range c.Entries {
+		files = append(files, ent.Path)
+	}
+
+	c.Attrs, err = docattr.ReadTree(filepath.Dir(cfile), prefix, files)
+	return c, err
 }
 
 func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
@@ -126,6 +115,7 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, error) {
 		nil,
 		map[string][]int{},
 		map[string]int{},
+		map[string]map[string]string{},
 	}
 
 	f, err := os.Open(path)

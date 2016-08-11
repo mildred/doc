@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -12,37 +13,6 @@ const DocAttrFile = ".docattr"
 type DocAttrItem struct {
 	Name  string
 	Attrs map[string]string
-}
-
-func Apply(attrs map[string]map[string]string, files []string, prefix string, items []DocAttrItem) {
-	for _, fname := range files {
-		if !strings.HasPrefix(fname, prefix) {
-			continue
-		}
-		for _, itm := range items {
-			matchdir := false
-			longprefix := filepath.Join(prefix, itm.Name)
-			if strings.HasSuffix(itm.Name, "/") {
-				longprefix += "/"
-				matchdir = true
-			}
-			if !matchdir && longprefix != fname ||
-				matchdir && !strings.HasPrefix(fname, longprefix) {
-				continue
-			}
-			if prefix != "" {
-				fname = fname[len(prefix):]
-			}
-			m := attrs[fname]
-			if m == nil {
-				m = map[string]string{}
-			}
-			for k, v := range itm.Attrs {
-				m[k] = v
-			}
-			attrs[fname] = m
-		}
-	}
 }
 
 func ReadAttrFile(path string) (items []DocAttrItem, err error) {
@@ -73,17 +43,53 @@ func ReadAttrFile(path string) (items []DocAttrItem, err error) {
 	return
 }
 
+type bySize []string
+
+func (a bySize) Len() int           { return len(a) }
+func (a bySize) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a bySize) Less(i, j int) bool { return len(a[i]) < len(a[j]) }
+
 func ReadTree(rootDir, prefix string, files []string) (attrs map[string]map[string]string, err error) {
+	var filenames []string
+	attrFiles := map[string][]DocAttrItem{}
 	attrs = map[string]map[string]string{}
+
 	for _, fname := range files {
 		if filepath.Base(fname) != DocAttrFile {
 			continue
 		}
-		items, err := ReadAttrFile(filepath.Join(rootDir, fname))
+		dir := filepath.Dir(fname) + "/"
+		if len(prefix) <= len(dir) && !strings.HasPrefix(dir, prefix) {
+			continue
+		}
+		filenames = append(filenames, fname)
+		attrFiles[fname], err = ReadAttrFile(filepath.Join(rootDir, fname))
 		if err != nil {
 			return nil, err
 		}
-		Apply(attrs, files, prefix, items)
+	}
+
+	sort.Sort(bySize(filenames))
+	for _, fname := range filenames {
+		dir := filepath.Dir(fname)
+		for _, itm := range attrFiles[fname] {
+			name := filepath.Join(dir, itm.Name)
+			if strings.HasSuffix(itm.Name, "/") {
+				name = name + "/"
+			}
+			if !strings.HasPrefix(name, prefix) {
+				continue
+			}
+			name = name[len(prefix):]
+			m := attrs[name]
+			if m == nil {
+				m = map[string]string{}
+			}
+			for k, v := range itm.Attrs {
+				m[k] = v
+			}
+			attrs[name] = m
+		}
 	}
 	return
 }

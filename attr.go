@@ -4,9 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/mildred/doc/commit"
-	"github.com/mildred/doc/docattr"
 )
 
 const usageAttr string = `doc attr [OPTIONS...] [DIR]
@@ -28,25 +29,18 @@ func mainAttr(args []string) int {
 		dir = "."
 	}
 
-	rootDir, prefix, c, err := commit.ReadRootCommit(dir)
+	c, err := commit.ReadCommit(dir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 
-	var files []string
-	for _, ent := range c.Entries {
-		files = append(files, ent.Path)
-	}
-
-	attrs, err := docattr.ReadTree(rootDir, prefix, files)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return 1
-	}
-
-	for f, a := range attrs {
-		fmt.Println(f)
+	for f, a := range c.Attrs {
+		path := filepath.Join(dir, f)
+		if strings.HasSuffix(f, "/") || f == "" {
+			path = path + "/"
+		}
+		fmt.Printf("%s\n", path)
 		for k, v := range a {
 			fmt.Printf(" %s=%s\n", k, v)
 		}
