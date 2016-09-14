@@ -19,6 +19,25 @@ command is there to verify that file data hasn't been changed.
 Note: if you modify a file and prevent the mtime update, the file will be
 detected as corrupt.
 
+Roadmap
+-------
+
+- Fully deprecating `sync` and `cp` in favor of `push` and `pull`
+
+- `push` and `pull` should commit the destination directory once the operation
+  is complete
+
+- Directories should be associated a unique id that is the same on all devices.
+  The unique id should be stored either in an extended attribute or in a global
+  repository indexed by the device and inode.
+
+- When two directories are merged, the new directory should have the two unique
+  ids to allow detecting a synchronisation with either one of the sources
+
+- Synchronisation should detect directory renames and replacements using this
+  unique id
+
+
 Usage
 -----
 
