@@ -46,75 +46,69 @@ the id must be stored in the extended attributes, and associated with the device
 id / inode number. In case the entry is copied, the inode number changes and the
 id must be regenerated.
 
-FIXME: a good idea is that when an id doesn't exists, instead of generating the
-id, assume the file is the same because it is in the same location. We keep the
-current behaviour for files with no id, and we support renames for files that
-have an id.
-
 ```
 loop over all sources entries, including directories (coming before files)
-  if destination exists:
-    compatible method:
-      if destination or source id is mismatching (or one id is missing):
-        arrange for the destination file/directory to be renamed because of a
-        conflict:
-        - rename the destination file (with a timestamp)
-          (if new name exists, increase timestamp accuracy, then add serial)
-        - mark the destination as a conflict
-        - update the destination commit datastructure in memory so the entry can
-          still be found
-        for the rest of the algorithm, assume the destination does not exists
-        (since we renamed the conflicting entry)
-      else
-        if none have an id (OPTIONAL):
-          generate the same id for both, start with source and if it fails, do
-          not write an id for destination
-        we are in case source and destination have matching ids, continue
 
-    {{{
-    first idea:
-      if matching destination entry do not have id but source has
-        compatible method: go directly to else, do not generate an id
-        simple method: generate a new id then go to else
-        better:
-          set the id of the destination entry to the source entry
-          FIXME: make sure that the same id doesn't already exists in the
-          destination
-      else if matching destination has an id but source hasn't
-        compatible method: go directly to else, do not generate an id
-        simple method: generate a new id then go to else
-        better:
-          set the source id to the destination id
-          FIXME: make sure that the same id doesn't already exists in the source
-      else if none has an id
-        generate the same id for both, start with source and if it fails, do not
-        write an id for destination
-      else, ids are mismatching [GOTO TARGET]
-        arrange for the destination file/directory to be renamed because of a
-        conflict:
-        - rename the file
-        - update the destination commit datastructure in memory so the entry can
-          still be found
-        for the rest of the algorithm, assume the destination does not exists
-        (since we renamed the conflicting entry)
-    }}}
+  DEFAULT DESTINATION:
+  the entry on the destination located on the same path than on source
 
-  if the destination does not exists but an entry with the same id can be found
-  in the destination commit (including parent entries that might have been
-  filtered away)
-    move that entry in place of the destination
+  MATCHING DESTINATION:
+  if the source has an id, lookup an entry of the same type and id in the
+  destination. The search must be done in the destination parent directory as
+  This is to prevent to have two different inodes with the same id.
+  far as possible (do not filter the .dircommit file on a subdirectory).
+  If the source id is empty and the default destination id is alsa empty, the
+  matching destination is the same as the default destination.
+
+  if there is a matching destination entry, and it has the same hash as the
+  source entry (or the entry type is directory)
+    we are only going to perform a rename on the destination. We can present it
+    accordingly on the progress bar (near instantaneous operation)
+
+  -- start algorithm --
+
+  if the default destination exists and it matches the id and hash (and,
+  optionally, the id is not empty for both):
+    (optionally, there is no need to generate an id)
+    (there is no id conflict)
+    (there is no rename)
+    (there is no hash conflict)
+    EXIT EARLY, GO TO NEXT FILE
+
+  OPTIONAL if destination exists, and neither source nor destination have an id:
+    generate the same id for both, start with source and if it fails, do
+    not write an id for destination
+
+  (HANDLE ID CONFLICT)
+  if default destination exists and destination or source id is mismatching:
+    arrange for the destination file/directory to be renamed because of a
+    conflict:
+    - rename the destination file (with a timestamp)
+      (if new name exists, increase timestamp accuracy, then add serial)
+    - mark the destination as a conflict
+    - update the destination commit datastructure in memory so the entry can
+      still be found
+    for the rest of the algorithm, assume the destination does not exists
+    (since we renamed the conflicting entry)
+
+  (HANDLE RENAME)
+  if the default destination is absent but there is a matching destination
+    move the matching destination in place of the default destination
     because the parent entries are handled first, the parent directory of the
     destination will not be moved away
 
+  (HANDLE HASH CONFLICT)
   if the destination exists, it has the same id
     we assume source and destination are the same type (they have ther same id)
     if the type is a directory, assume the content is identical
     else, if the content is different
       rename the destination file and mark a conflict
 
-  if the destination does not exists
-      copy the source file to the destination (including the id)
-      update the commit structure in memory
+  (ACTUAL COPY)
+  if the destination exists, it must have the same id and hash
+  else, if the destination does not exists
+    copy the source file to the destination (including the id)
+    update the commit structure in memory
 ```
 
 
