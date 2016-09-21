@@ -22,6 +22,7 @@ const XattrCommit string = "user.doc.commit"
 type Entry struct {
 	Hash []byte
 	Path string
+	Uuid string
 }
 
 func (e *Entry) HashText() string {
@@ -125,6 +126,67 @@ func ReadCommit(dirPath string) (*Commit, error) {
 	return c, err
 }
 
+func readEntryAttr(ent *Entry, key, val string) {
+	switch key {
+	case "p":
+		ent.Path = val
+		break
+	case "h":
+		ent.Hash = []byte(val)
+		break
+	case "i":
+		ent.Uuid = val
+		break
+	default:
+		break
+	}
+}
+
+func readEntry(scanner *bufio.Scanner) (ent Entry, ent_hash string) {
+	line := scanner.Text()
+	if len(line) > 0 && line == "-" {
+		// New style entries
+		var key, val string
+		for {
+			if !scanner.Scan() {
+				break
+			}
+			line = scanner.Text()
+			if line == "" {
+				break
+			}
+			if line[0] == '\t' {
+				val += "\n" + line[1:]
+			} else {
+				if key != "" {
+					readEntryAttr(&ent, key, val)
+					key = ""
+				}
+				s := strings.SplitN(line, "=", 2)
+				if len(s) == 2 {
+					key = s[0]
+					val = s[1]
+				}
+			}
+		}
+		if key != "" {
+			readEntryAttr(&ent, key, val)
+		}
+	} else {
+		elems := strings.SplitN(line, "\t", 2)
+		f := DecodePath(elems[1])
+		ent = Entry{
+			Path: f,
+			Hash: []byte(elems[0]),
+		}
+	}
+	if ent.Path != "" {
+		ent_hash = string(ent.Hash)
+		ent.Hash = base58.Decode(ent_hash)
+	}
+	return
+}
+
 func readCommitFile(path, prefix string, reverse bool) (*Commit, []string, error) {
 	var files []string
 	c := Commit{
@@ -145,15 +207,13 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, []string, error
 	scanner := bufio.NewScanner(f)
 	idx := 0
 	for scanner.Scan() {
-		line := scanner.Text()
-		elems := strings.SplitN(line, "\t", 2)
-		f := DecodePath(elems[1])
-		files = append(files, f)
-		itempath := FilterPrefix(f, prefix, reverse)
-		if itempath != "" {
-			c.Entries = append(c.Entries, Entry{base58.Decode(elems[0]), itempath})
-			c.ByPath[itempath] = idx
-			c.ByHash[elems[0]] = append(c.ByHash[elems[0]], idx)
+		ent, ent_hash := readEntry(scanner)
+		ent.Path = FilterPrefix(ent.Path, prefix, reverse)
+		if ent.Path != "" {
+			files = append(files, ent.Path)
+			c.Entries = append(c.Entries, ent)
+			c.ByPath[ent.Path] = idx
+			c.ByHash[ent_hash] = append(c.ByHash[ent_hash], idx)
 			idx = idx + 1
 		}
 	}
@@ -383,11 +443,10 @@ func readEntries(path, prefix string, reverse bool) ([]Entry, error) {
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := scanner.Text()
-		elems := strings.SplitN(line, "\t", 2)
-		itempath := FilterPrefix(DecodePath(elems[1]), prefix, reverse)
-		if itempath != "" {
-			res = append(res, Entry{base58.Decode(elems[0]), itempath})
+		ent, _ := readEntry(scanner)
+		ent.Path = FilterPrefix(ent.Path, prefix, reverse)
+		if ent.Path != "" {
+			res = append(res, ent)
 		}
 	}
 

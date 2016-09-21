@@ -119,10 +119,7 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 		}
 
 		// Find destination file name
-		d := commit.Entry{
-			s.Hash,
-			s.Path,
-		}
+		var d commit.Entry = commit.Entry(s)
 		_, conflict := dst.ByPath[s.Path]
 		if conflict {
 			d.Path = commit.FindConflictFileName(s, dst)

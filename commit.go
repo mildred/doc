@@ -13,6 +13,8 @@ import (
 	repo "github.com/mildred/doc/repo"
 )
 
+const FIXME_Uuid = ""
+
 const commitUsage string = `doc commit [OPTIONS...] [DIR]
 
 For each modified file in DIR or the current directory, computes a checksum and
@@ -98,7 +100,7 @@ func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_show
 					fmt.Fprintf(os.Stderr, "%s: hash not available\n", path)
 					status = 1
 				} else {
-					commitEntries = append(commitEntries, commit.Entry{hash, relpath})
+					commitEntries = append(commitEntries, commit.Entry{hash, relpath, FIXME_Uuid})
 				}
 			}
 		} else {
@@ -113,7 +115,7 @@ func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_show
 				fmt.Printf("%s %s\n", base58.Encode(digest), path)
 			}
 			if doCommit {
-				commitEntries = append(commitEntries, commit.Entry{digest, relpath})
+				commitEntries = append(commitEntries, commit.Entry{digest, relpath, FIXME_Uuid})
 			}
 		}
 
