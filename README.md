@@ -27,8 +27,12 @@ Roadmap
 - `push` and `pull` should commit the destination directory once the operation
   is complete
 
-- commits should contain extra metadata instead of using xattrs. Conflict
-  information in particular, so it's easier to manipulate that.
+- conflicts should be easy to locate and resolve (`doc conflicts`, `doc
+  resolve`). Should be stored in .doccommit
+
+- push or pull should not propagate a file in conflict, but a log should
+  indicate that the file was skipped because it is a conflict. After push or
+  pull, a list of conflicts should be shown.
 
 - Directories should be associated a unique id that is the same on all devices.
   The unique id should be stored either in an extended attribute or in a global
