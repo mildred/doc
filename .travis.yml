@@ -1,0 +1,16 @@
+language: go
+go:
+- 1.6
+- tip
+go_import_path: github.com/mildred/doc
+before_deploy: |
+  rm -f doc.zip
+  zip doc.zip doc
+deploy:
+  provider: releases
+  api_key:
+    secure: ri/0wY33pX1mnqgzHyHi9h2oOQxAVuknr+yicwonQe3g59YFxsrsiLNaw9y5FFM4QuZD4fh3xyrTYCBeN6SOAwIYpX6j54FBLlupiEhDok1Igt6EGswzMCh3hoy/24UHbT15ZOHik3ar+JBPl3G9Pg/VNsc/i0QpRYu0UcX7XWPHNf3wGqBgy9iGwlSjJ7PFh+5iAWr3Rkqf88K10pMEJ53VALfueEc2RHEAqQrpc1dpluOoQpVp/UE6BJFoNNMW3jSyE/djsox+M4anSanAzqdzlnACEBXfIt6bO1hGjgFOeoGguFUmRNITI4i7RPja3cjLvOA2VQZMoBYv1HN1bTIF+on6ok6kABA3LziVgm01uaYJqKAHdoRgVHeS+WAZ6thEl+joIp63Qqvp9NUyRVEdDfTxzznID/bQBY48J0LlOR1LNjcYW4gmvAoHMlCJxIACoDrkFvdwR6ygKZmqyvP5yvoqrFhJMW8kR779XupHirC5EqffWNO+4yYH9wTfghOHNTqCdp1tdb+wD/xS27yRYTrTDuJnLIgIyoy51xCriiFlD1CKzXTBdqgIolLWB82LgneZEH91kFF1lWcXJxJZxvDjHGl+Xg9rUbJhAFRzTuA2Bg3XEJmykZlzdhoQrYTcxg6LNkJ+ipAw6w3/E3PBjvtAyzqB3sxfFdq1hnw=
+  file: doc.zip
+  on:
+    repo: mildred/doc
+    tags: true
