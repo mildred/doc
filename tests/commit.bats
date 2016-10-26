@@ -6,17 +6,17 @@ load common
   doc init
   echo a >afile
 
-  run doc status -n
+  run sh -c 'doc status -n | grep -v doccommit'
   [[ "${lines[0]}" = $'?\tafile' ]]
   [[ $seatus -eq 0 ]]
 
   run doc commit afile
   [[ $seatus -eq 0 ]]
 
-  run doc status -n
+  run sh -c 'run doc status -n | grep -v doccommit'
   [[ "${lines[0]}" = "" ]]
 
   date >>afile
-  run doc status -n
+  run sh -c 'run doc status -n | grep -v doccommit'
   [[ "${lines[0]}" = $'+*\tafile' ]]
 }
