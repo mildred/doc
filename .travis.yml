@@ -3,9 +3,15 @@ go:
 - 1.6
 - tip
 go_import_path: github.com/mildred/doc
-before_deploy: |
-  rm -f doc.zip
-  zip doc.zip doc
+before_install:
+  - sudo add-apt-repository ppa:duggan/bats --yes
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq bats
+script:
+  - bats tests
+before_deploy:
+  - rm -f doc.zip
+  - zip doc.zip doc
 deploy:
   provider: releases
   api_key:
