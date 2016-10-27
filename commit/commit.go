@@ -33,6 +33,7 @@ type Commit struct {
 	Entries []Entry
 	ByHash  map[string][]int
 	ByPath  map[string]int
+	ByUuid  map[string]int
 	Attrs   map[string]map[string]string
 }
 
@@ -108,6 +109,7 @@ func ReadCommit(dirPath string) (*Commit, error) {
 			[]Entry{},
 			map[string][]int{},
 			map[string]int{},
+			map[string]int{},
 			map[string]map[string]string{},
 		}, nil
 	}
@@ -132,7 +134,7 @@ func readEntryAttr(ent *Entry, key, val string) {
 		ent.Path = val
 		break
 	case "h":
-		ent.Hash = []byte(val)
+		ent.Hash = base58.Decode(val)
 		break
 	case "i":
 		ent.Uuid = val
@@ -193,6 +195,7 @@ func readCommitFile(path, prefix string) (*Commit, []string, error) {
 		nil,
 		map[string][]int{},
 		map[string]int{},
+		map[string]int{},
 		map[string]map[string]string{},
 	}
 
@@ -214,6 +217,9 @@ func readCommitFile(path, prefix string) (*Commit, []string, error) {
 			c.Entries = append(c.Entries, ent)
 			c.ByPath[ent.Path] = idx
 			c.ByHash[ent_hash] = append(c.ByHash[ent_hash], idx)
+			if ent.Uuid != "" {
+				c.ByUuid[ent.Uuid] = idx
+			}
 			idx = idx + 1
 		}
 	}
