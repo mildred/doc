@@ -356,8 +356,24 @@ func WriteDirAppend(dirPath string, entries []Entry) error {
 	return writeDoccommitFile(cfile, entries)
 }
 
+func formatKeyVal(key, val string) string {
+	if val == "" {
+		return ""
+	} else {
+		return key + "=" + strings.Replace(val, "\n", "\n\t", -1) + "\n"
+	}
+}
+
 func entryToLine(e Entry) string {
-	return fmt.Sprintf("%s\t%s\n", base58.Encode(e.Hash), EncodePath(e.Path))
+	if e.Uuid != "" {
+		return "-\n" +
+			formatKeyVal("p", e.Path) +
+			formatKeyVal("h", base58.Encode(e.Hash)) +
+			formatKeyVal("i", e.Uuid) +
+			"\n"
+	} else {
+		return fmt.Sprintf("%s\t%s\n", base58.Encode(e.Hash), EncodePath(e.Path))
+	}
 }
 
 func writeDoccommitFile(newpath string, entries []Entry) error {
