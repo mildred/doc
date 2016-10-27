@@ -117,7 +117,7 @@ func ReadCommit(dirPath string) (*Commit, error) {
 		return nil, err
 	}
 
-	c, files, err := readCommitFile(cfile, prefix, false)
+	c, files, err := readCommitFile(cfile, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func readEntry(scanner *bufio.Scanner) (ent Entry, ent_hash string) {
 	return
 }
 
-func readCommitFile(path, prefix string, reverse bool) (*Commit, []string, error) {
+func readCommitFile(path, prefix string) (*Commit, []string, error) {
 	var files []string
 	c := Commit{
 		nil,
@@ -208,7 +208,7 @@ func readCommitFile(path, prefix string, reverse bool) (*Commit, []string, error
 	idx := 0
 	for scanner.Scan() {
 		ent, ent_hash := readEntry(scanner)
-		ent.Path = FilterPrefix(ent.Path, prefix, reverse)
+		ent.Path = FilterPrefix(ent.Path, prefix, false)
 		if ent.Path != "" {
 			files = append(files, ent.Path)
 			c.Entries = append(c.Entries, ent)
@@ -455,12 +455,18 @@ func readEntries(path, prefix string, reverse bool) ([]Entry, error) {
 
 func FilterPrefix(path, prefix string, reverse bool) string {
 	hasPrefix := prefix == "" || strings.HasPrefix(path, prefix)
-	if !reverse && hasPrefix {
-		return path[len(prefix):]
-	} else if reverse && !hasPrefix {
-		return path
+	if !reverse {
+		res, err := filepath.Rel(prefix, path)
+		if err != nil {
+			panic(err)
+		}
+		return res
 	} else {
-		return ""
+		if !hasPrefix {
+			return path
+		} else {
+			return ""
+		}
 	}
 }
 
