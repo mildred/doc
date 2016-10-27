@@ -80,7 +80,9 @@ func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_show
 			return filepath.SkipDir
 		} else if doCommit && filepath.Join(dir, commit.Doccommit) == path {
 			return nil
-		} else if info.IsDir() || !info.Mode().IsRegular() {
+		} else if info.IsDir() {
+			relpath = relpath + "/"
+		} else if !info.Mode().IsRegular() {
 			return nil
 		}
 
