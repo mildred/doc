@@ -46,7 +46,7 @@ func mainPull(args []string) int {
 		return 1
 	}
 
-	return pullPush(src, target, *opt_quiet, *opt_verbose)
+	return pullPush(src, target, *opt_quiet, *opt_verbose, false)
 }
 
 func mainPush(args []string) int {
@@ -70,14 +70,14 @@ func mainPush(args []string) int {
 		return 1
 	}
 
-	return pullPush(src, target, *opt_quiet, *opt_verbose)
+	return pullPush(src, target, *opt_quiet, *opt_verbose, false)
 }
 
-func pullPush(src, target string, quiet bool, verb bool) int {
+func pullPush(src, target string, quiet bool, verb, renames bool) int {
 	p := newPullProgress(verb)
 
 	res := 0
-	err, errs := copy.Copy(src, target, p)
+	err, errs := copy.Copy(src, target, p, renames)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		res = 1

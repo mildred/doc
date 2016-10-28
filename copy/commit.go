@@ -14,7 +14,7 @@ type Progress interface {
 	SetProgress(cur, max int, message string)
 }
 
-func Copy(srcdir, dstdir string, p Progress) (error, []error) {
+func Copy(srcdir, dstdir string, p Progress, rename bool) (error, []error) {
 	if p != nil {
 		p.SetProgress(0, 4, "Read commit "+srcdir)
 	}
@@ -57,13 +57,17 @@ func Copy(srcdir, dstdir string, p Progress) (error, []error) {
 	return err, errs
 }
 
-func canCopy(s commit.Entry, src, dst *commit.Commit) bool {
+func wantCopy(s commit.Entry, src, dst *commit.Commit) bool {
 	// Already there, skip
 	di, conflict := dst.ByPath[s.Path]
 	if conflict && bytes.Equal(dst.Entries[di].Hash, s.Hash) {
 		return false
 	}
 
+	return canCopy(s, src, dst)
+}
+
+func canCopy(s commit.Entry, src, dst *commit.Commit) bool {
 	// Source is private, skip
 	is_private := src.GetAttr(s.Path, "private") == "1"
 	if is_private {
@@ -102,7 +106,7 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 	if p != nil {
 		numfiles = 0
 		for _, s := range src.Entries {
-			if canCopy(s, src, dst) {
+			if wantCopy(s, src, dst) {
 				numfiles = numfiles + 1
 			}
 		}
@@ -114,7 +118,7 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 
 	for _, s := range src.Entries {
 		// Cannot copy, skip
-		if !canCopy(s, src, dst) {
+		if !wantCopy(s, src, dst) {
 			continue
 		}
 
