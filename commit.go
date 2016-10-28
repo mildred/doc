@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	base58 "github.com/jbenet/go-base58"
 	attrs "github.com/mildred/doc/attrs"
@@ -12,8 +13,6 @@ import (
 	ignore "github.com/mildred/doc/ignore"
 	repo "github.com/mildred/doc/repo"
 )
-
-const FIXME_Uuid = ""
 
 const commitUsage string = `doc commit [OPTIONS...] [DIR]
 
@@ -51,22 +50,42 @@ func mainCommit(args []string) int {
 }
 
 func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_showerr bool) int {
+	var c *commit.Commit
+	var cDir string
+	var err error
 	status := 0
 	numerr := 0
-
-	var commitEntries []commit.Entry
 	doCommit := !opt_nodoccommit
 
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	st, err := os.Lstat(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		return 1
+	}
+
+	if st.IsDir() {
+		cDir = dir
+		c, err = commit.ReadCommit(dir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s commit: %v\n", dir, err.Error())
+			return 1
+		}
+		c.DropTree("")
+	} else {
+		cDir = filepath.Dir(dir)
+		c, err = commit.ReadCommit(cDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s commit: %v\n", dir, err.Error())
+			return 1
+		}
+		if i, ok := c.ByPath[filepath.Base(dir)]; ok {
+			c.Entries[i].DropEntry()
+		}
+	}
+
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
-			status = 1
-			return err
-		}
-
-		relpath, err := filepath.Rel(dir, path)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			status = 1
 			return err
 		}
@@ -80,10 +99,19 @@ func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_show
 			return filepath.SkipDir
 		} else if doCommit && filepath.Join(dir, commit.Doccommit) == path {
 			return nil
-		} else if info.IsDir() {
-			relpath = relpath + "/"
-		} else if !info.Mode().IsRegular() {
+		} else if !info.IsDir() && !info.Mode().IsRegular() {
 			return nil
+		}
+
+		relpath, err := filepath.Rel(cDir, path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			status = 1
+			return err
+		}
+
+		if info.IsDir() {
+			relpath = relpath + "/"
 		}
 
 		hashTime, err := repo.GetHashTime(path)
@@ -91,36 +119,49 @@ func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_show
 			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
 			return nil
 		}
+		hash_is_ok := err == nil && hashTime == info.ModTime()
+		var digest []byte
 
-		if err == nil && hashTime == info.ModTime() {
+		if hash_is_ok {
 			if doCommit {
-				hash, err := repo.GetHash(path, info, false)
+				digest, err = repo.GetHash(path, info, false)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 					status = 1
-				} else if hash == nil {
+					return nil
+				} else if digest == nil {
 					fmt.Fprintf(os.Stderr, "%s: hash not available\n", path)
 					status = 1
-				} else {
-					commitEntries = append(commitEntries, commit.Entry{hash, relpath, FIXME_Uuid})
+					return nil
 				}
 			}
 		} else {
-			digest, err := commitFile(path, info, opt_force)
+			digest, err = commitFile(path, info, opt_force)
 			if err != nil {
 				numerr = numerr + 1
 				if opt_showerr {
 					status = 1
 					fmt.Fprintf(os.Stderr, "%s: %v\n", path, err.Error())
 				}
+				return nil
 			} else if digest != nil {
 				fmt.Printf("%s %s\n", base58.Encode(digest), path)
 			}
-			if doCommit {
-				commitEntries = append(commitEntries, commit.Entry{digest, relpath, FIXME_Uuid})
-			}
 		}
 
+		if !doCommit {
+			return nil
+		}
+
+		var uuid string
+		var dev, ino uint64
+		if st, ok := info.Sys().(*syscall.Stat_t); ok {
+			uuid = c.UuidByDevInode[commit.DeviceInodeString(st.Dev, st.Ino)]
+			dev = st.Dev
+			ino = st.Ino
+		}
+
+		c.Entries = append(c.Entries, commit.Entry{digest, relpath, uuid, dev, ino, false})
 		return nil
 	})
 
@@ -137,19 +178,8 @@ func runCommit(dir string, opt_force, opt_nodoccommit, opt_nodocignore, opt_show
 		}
 	}
 
-	if doCommit && len(commitEntries) > 0 {
-		st, err := os.Lstat(dir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-			return 1
-		}
-		if !st.IsDir() && len(commitEntries) == 1 {
-			commitEntries[0].Path = filepath.Base(dir)
-			dir = filepath.Dir(dir)
-			err = commit.WriteDirAppend(dir, commitEntries)
-		} else {
-			err = commit.WriteDir(dir, commitEntries)
-		}
+	if doCommit {
+		err = c.Write()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			status = 1

@@ -88,7 +88,7 @@ func copyTree(srcdir, dstdir string, src, dst *commit.Commit, p Progress) ([]com
 		p.SetProgress(2, 4, "Prepare copy: open "+dstdir)
 	}
 
-	c, err := commit.OpenDir(dstdir)
+	c, err := commit.OpenDirAppend(dstdir)
 	if err != nil {
 		return success, err, errs
 	}

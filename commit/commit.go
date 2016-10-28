@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	base58 "github.com/jbenet/go-base58"
@@ -19,10 +20,41 @@ import (
 const Doccommit string = ".doccommit"
 const XattrCommit string = "user.doc.commit"
 
+func DeviceInodeString(dev, ino uint64) string {
+	if dev == 0 && ino == 0 {
+		return ""
+	} else {
+		return strconv.FormatUint(dev, 10) + ":" + strconv.FormatUint(ino, 10)
+	}
+}
+
+func StringDevice(devino string) uint64 {
+	ids := strings.SplitN(devino, ":", 2)
+	id, _ := strconv.ParseUint(ids[0], 10, 64)
+	return id
+}
+
+func StringInode(devino string) uint64 {
+	ids := strings.SplitN(devino, ":", 2)
+	if len(ids) > 1 {
+		id, _ := strconv.ParseUint(ids[1], 10, 64)
+		return id
+	} else {
+		return 0
+	}
+}
+
 type Entry struct {
-	Hash []byte
-	Path string
-	Uuid string
+	Hash   []byte
+	Path   string
+	Uuid   string
+	Device uint64
+	Inode  uint64
+	Drop   bool
+}
+
+func (e *Entry) DropEntry() {
+	e.Drop = true
 }
 
 func (e *Entry) HashText() string {
@@ -30,11 +62,14 @@ func (e *Entry) HashText() string {
 }
 
 type Commit struct {
-	Entries []Entry
-	ByHash  map[string][]int
-	ByPath  map[string]int
-	ByUuid  map[string]int
-	Attrs   map[string]map[string]string
+	fname          string
+	prefix         string
+	Entries        []Entry
+	ByHash         map[string][]int
+	ByPath         map[string]int
+	ByUuid         map[string]int
+	Attrs          map[string]map[string]string
+	UuidByDevInode map[string]string
 }
 
 func (c *Commit) GetAttr(file, name string) string {
@@ -55,6 +90,21 @@ func (c *Commit) GetAttr(file, name string) string {
 		return attrs[name]
 	}
 	return ""
+}
+
+func (c *Commit) DropTree(path string) {
+	if path != "" && !strings.HasSuffix(path, "/") {
+		path = path + "/"
+	}
+	for i, e := range c.Entries {
+		if strings.HasPrefix(e.Path, path) && !strings.HasPrefix(e.Path, path+"../") {
+			c.Entries[i].DropEntry()
+		}
+	}
+}
+
+func (c *Commit) Write() error {
+	return writeDoccommitFile(c.fname, c.prefix, c.Entries)
 }
 
 // Takes a canonical path
@@ -105,12 +155,16 @@ func ReadCommit(dirPath string) (*Commit, error) {
 
 	cfile := findCommitFile(dirPath)
 	if cfile == "" {
+		cfile = filepath.Join(dirPath, Doccommit)
 		return &Commit{
+			cfile,
+			"",
 			[]Entry{},
 			map[string][]int{},
 			map[string]int{},
 			map[string]int{},
 			map[string]map[string]string{},
+			map[string]string{},
 		}, nil
 	}
 
@@ -136,8 +190,12 @@ func readEntryAttr(ent *Entry, key, val string) {
 	case "h":
 		ent.Hash = base58.Decode(val)
 		break
-	case "i":
+	case "u":
 		ent.Uuid = val
+		break
+	case "I":
+		ent.Device = StringDevice(val)
+		ent.Inode = StringInode(val)
 		break
 	default:
 		break
@@ -192,11 +250,14 @@ func readEntry(scanner *bufio.Scanner) (ent Entry, ent_hash string) {
 func readCommitFile(path, prefix string) (*Commit, []string, error) {
 	var files []string
 	c := Commit{
+		path,
+		prefix,
 		nil,
 		map[string][]int{},
 		map[string]int{},
 		map[string]int{},
 		map[string]map[string]string{},
+		map[string]string{},
 	}
 
 	f, err := os.Open(path)
@@ -211,17 +272,19 @@ func readCommitFile(path, prefix string) (*Commit, []string, error) {
 	idx := 0
 	for scanner.Scan() {
 		ent, ent_hash := readEntry(scanner)
-		ent.Path = FilterPrefix(ent.Path, prefix, false)
-		if ent.Path != "" {
-			files = append(files, ent.Path)
-			c.Entries = append(c.Entries, ent)
-			c.ByPath[ent.Path] = idx
-			c.ByHash[ent_hash] = append(c.ByHash[ent_hash], idx)
-			if ent.Uuid != "" {
-				c.ByUuid[ent.Uuid] = idx
-			}
-			idx = idx + 1
+		ent.Path, err = filepath.Rel(prefix, ent.Path)
+		if err != nil {
+			panic(err)
 		}
+		files = append(files, ent.Path)
+		c.Entries = append(c.Entries, ent)
+		c.ByPath[ent.Path] = idx
+		c.ByHash[ent_hash] = append(c.ByHash[ent_hash], idx)
+		if ent.Uuid != "" {
+			c.ByUuid[ent.Uuid] = idx
+			c.UuidByDevInode[DeviceInodeString(ent.Device, ent.Inode)] = ent.Uuid
+		}
+		idx = idx + 1
 	}
 
 	return &c, files, scanner.Err()
@@ -233,7 +296,7 @@ type CommitAppender struct {
 	first  bool
 }
 
-func OpenDir(dirPath string) (*CommitAppender, error) {
+func OpenDirAppend(dirPath string) (*CommitAppender, error) {
 	dirPath, err := makeCanonical(dirPath)
 	if err != nil {
 		return nil, err
@@ -265,7 +328,7 @@ func (c *CommitAppender) Add(e Entry) error {
 		}
 		c.first = false
 	}
-	_, err := c.f.Write([]byte(entryToLine(e)))
+	_, err := c.f.Write([]byte(entryToLine("", e)))
 	return err
 }
 
@@ -305,7 +368,7 @@ func WriteDir(dirPath string, entries []Entry) error {
 		}
 	}
 
-	return writeDoccommitFile(cfile, entries)
+	return writeDoccommitFile(cfile, "", entries)
 }
 
 func WriteDirAppend(dirPath string, entries []Entry) error {
@@ -353,7 +416,7 @@ func WriteDirAppend(dirPath string, entries []Entry) error {
 		entries = append(entries, ent)
 	}
 
-	return writeDoccommitFile(cfile, entries)
+	return writeDoccommitFile(cfile, "", entries)
 }
 
 func formatKeyVal(key, val string) string {
@@ -364,23 +427,36 @@ func formatKeyVal(key, val string) string {
 	}
 }
 
-func entryToLine(e Entry) string {
-	if e.Uuid != "" {
+func entryToLine(prefix string, e Entry) string {
+	if e.Drop {
+		return ""
+	}
+
+	path := e.Path
+	if prefix != "" {
+		path = filepath.Join(prefix, path)
+		if strings.HasSuffix(e.Path, "/") {
+			path = path + "/"
+		}
+	}
+
+	if e.Uuid != "" || e.Device != 0 || e.Inode != 0 {
 		return "-\n" +
-			formatKeyVal("p", e.Path) +
+			formatKeyVal("p", path) +
 			formatKeyVal("h", base58.Encode(e.Hash)) +
-			formatKeyVal("i", e.Uuid) +
+			formatKeyVal("u", e.Uuid) +
+			formatKeyVal("I", DeviceInodeString(e.Device, e.Inode)) +
 			"\n"
 	} else {
-		return fmt.Sprintf("%s\t%s\n", base58.Encode(e.Hash), EncodePath(e.Path))
+		return fmt.Sprintf("%s\t%s\n", base58.Encode(e.Hash), EncodePath(path))
 	}
 }
 
-func writeDoccommitFile(newpath string, entries []Entry) error {
+func writeDoccommitFile(newpath, prefix string, entries []Entry) error {
 	var data []byte
 
 	for _, e := range entries {
-		data = append(data, []byte(entryToLine(e))...)
+		data = append(data, []byte(entryToLine(prefix, e))...)
 	}
 
 	digestBin := sha1.Sum(data)
@@ -393,20 +469,27 @@ func writeDoccommitFile(newpath string, entries []Entry) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if f != nil {
+			fn := f.Name()
+			f.Close()
+			os.Remove(fn)
+		}
+	}()
 
 	_, err = f.Write(data)
 	if err != nil {
-		os.Remove(f.Name())
 		return err
 	}
 
 	// Rename the doccommit file in a single atomic operation
 	err = os.Rename(f.Name(), newpath)
 	if err != nil {
-		os.Remove(f.Name())
 		return err
 	}
+
+	f.Close()
+	f = nil
 
 	return commitDircommit(newpath, digest)
 }
@@ -476,7 +559,6 @@ func readEntries(path, prefix string, reverse bool) ([]Entry, error) {
 }
 
 func FilterPrefix(path, prefix string, reverse bool) string {
-	hasPrefix := prefix == "" || strings.HasPrefix(path, prefix)
 	if !reverse {
 		res, err := filepath.Rel(prefix, path)
 		if err != nil {
@@ -484,6 +566,7 @@ func FilterPrefix(path, prefix string, reverse bool) string {
 		}
 		return res
 	} else {
+		hasPrefix := prefix == "" || strings.HasPrefix(path, prefix)
 		if !hasPrefix {
 			return path
 		} else {
