@@ -336,41 +336,6 @@ func (c *CommitAppender) Close() error {
 	return c.f.Close()
 }
 
-func WriteDir(dirPath string, entries []Entry) error {
-	dirPath, err := makeCanonical(dirPath)
-	if err != nil {
-		return err
-	}
-
-	cfile := findCommitFile(dirPath)
-	if cfile == "" {
-		cfile = filepath.Join(dirPath, Doccommit)
-	}
-
-	prefix, err := pathPrefix(filepath.Dir(cfile), dirPath)
-	if err != nil {
-		return err
-	}
-
-	if prefix != "" {
-		newEntries := entries
-
-		// Read current entries
-		entries, err = readEntries(cfile, prefix, true)
-		if err != nil {
-			return err
-		}
-
-		// Prefix the new entries
-		for _, ent := range newEntries {
-			ent.Path = prefix + ent.Path
-			entries = append(entries, ent)
-		}
-	}
-
-	return writeDoccommitFile(cfile, "", entries)
-}
-
 func WriteDirAppend(dirPath string, entries []Entry) error {
 	dirPath, err := makeCanonical(dirPath)
 	if err != nil {
