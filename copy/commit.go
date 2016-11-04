@@ -39,7 +39,13 @@ func Copy(srcdir, dstdir string, p Progress, rename bool) (error, []error) {
 		p.SetProgress(2, 4, "Prepare copy")
 	}
 
-	successes, err, errs := copyTree(srcdir, dstdir, src, dst, p)
+	var successes []commit.Entry
+	var errs []error
+	if rename {
+		successes, err, errs = copyTreeRename(srcdir, dstdir, src, dst, p)
+	} else {
+		successes, err, errs = copyTree(srcdir, dstdir, src, dst, p)
+	}
 	if err != nil {
 		return err, errs
 	}
