@@ -111,8 +111,7 @@ func CopyFileTemp(src, dst string) (string, error, []error) {
 			errs = append(errs, err)
 		}
 
-		// FIXME: extended attributes for symlinks
-		// golang is missing some syscalls
+		// FIXME: extended attributes for symlinks (golang is missing some syscalls)
 
 		xattr, values, err := attrs.GetList(src)
 		if err != nil {
