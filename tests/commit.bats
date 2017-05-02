@@ -13,10 +13,10 @@ load common
   run doc commit afile
   [[ $seatus -eq 0 ]]
 
-  run sh -c 'run doc status -n | grep -v doccommit'
+  run sh -c 'doc status -n | grep -v doccommit'
   [[ "${lines[0]}" = "" ]]
 
   date >>afile
-  run sh -c 'run doc status -n | grep -v doccommit'
+  run sh -c 'doc status -n | grep -v doccommit'
   [[ "${lines[0]}" = $'+*\tafile' ]]
 }
